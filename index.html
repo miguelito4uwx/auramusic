@@ -839,6 +839,20 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 </div>
 
 <script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, doc, setDoc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+/* ══ ERROR DISPLAY ══ */
+window.addEventListener('error', e=>{
+document.getElementById('loader').innerHTML=`<div style="color:#f87171;font-size:13px;padding:20px;text-align:center;max-width:320px"><strong>Error loading Aura</strong><br><br>${e.message}<br><br><button onclick="location.reload()" style="margin-top:12px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">Retry</button></div>`;
+document.getElementById('loader').classList.remove('out');
+});
+window.addEventListener('unhandledrejection', e=>{
+document.getElementById('loader').innerHTML=`<div style="color:#f87171;font-size:13px;padding:20px;text-align:center;max-width:320px"><strong>Error loading Aura</strong><br><br>${e.reason?.message||e.reason||'Unknown error'}<br><br><button onclick="location.reload()" style="margin-top:12px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">Retry</button></div>`;
+document.getElementById('loader').classList.remove('out');
+});
+
 /* ══ SERVICE WORKER (blob) ══ */
 if('serviceWorker' in navigator){
 const sw=`
@@ -940,9 +954,6 @@ try{const p=ytPlayer.getCurrentTime()||0,d=ytPlayer.getDuration()||1;if(d>0)navi
 
 /* ══ FIREBASE ══ */
 const APP_VERSION = '2.0.0';
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
 apiKey: "AIzaSyAwUcq3B_j5-AmodjwhOGUwlOQCqakLE84",
@@ -957,7 +968,7 @@ const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
 
 /* ══ BOOT ══ */
-window.onload=()=>{setTimeout(()=>{document.getElementById('loader').classList.add('out');boot();},3200);};
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{document.getElementById('loader').classList.add('out');boot();},3200)});
 function boot(){
 prefs=S.g('aura_prefs')||{};
 applyPrefs();buildSwatches();buildBgOps();buildFontOps();
@@ -1155,7 +1166,6 @@ document.getElementById('urlIn').addEventListener('keydown',e=>{if(e.key==='Ente
 function renderQ(){const el=document.getElementById('qlist');document.getElementById('qCount').textContent=queue.length?`(${queue.length})`:'';if(!queue.length){el.innerHTML=`<div class="empty"><div class="eic">🎧</div><div class="etx">Paste a YouTube link above<br>to start your queue</div></div>`;return;}el.innerHTML=queue.map((t,i)=>`<div class="qi ${i===curIdx?'on':''}" onclick="playTrack(${i})"><div class="qnum ${i===curIdx?'on':''}">${i===curIdx?'♫':i+1}</div><img class="qthumb" src="${esc(t.thumb)}" alt="" loading="lazy"><div class="qinfo"><div class="qtitle">${esc(t.title)}</div><div class="qch">${esc(t.channel)}</div></div><div class="q-acts"><button class="q-act" onclick="openAddToPlFor(event,${i})" title="Add to playlist">🎵</button><button class="q-act rm" onclick="rmQ(event,${i})" title="Remove">✕</button></div></div>`).join('');}
 function rmQ(e,i){e.stopPropagation();queue.splice(i,1);if(i===curIdx){if(queue.length)playTrack(Math.min(i,queue.length-1));else{curIdx=-1;stopTrack();document.getElementById('pcard').classList.add('hidden');document.getElementById('playerEmpty').classList.remove('hidden');document.getElementById('mini').classList.remove('on');}}else if(curIdx>i)curIdx--;saveQ();renderQ();}
 function clearQueue(){queue=[];curIdx=-1;stopTrack();document.getElementById('pcard').classList.add('hidden');document.getElementById('playerEmpty').classList.remove('hidden');document.getElementById('mini').classList.remove('on');saveQ();renderQ();}
-function saveQ(){if(user&&prefs.remQ!==false)S.s('aura_q_'+user.id,queue);}
 
 /* ══ PLAYLISTS ══ */
 function renderPls(){const g=document.getElementById('plgrid');g.innerHTML=pls.map(pl=>{const art=pl.cover?`<img src="${esc(pl.cover)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" alt="" onerror="this.style.display='none'">`:(pl.tracks.length>=4?`<div class="plart-g">${pl.tracks.slice(0,4).map(t=>`<img src="${esc(t.thumb)}" alt="">`).join('')}</div>`:pl.tracks[0]?`<img src="${esc(pl.tracks[0].thumb)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" alt="">`:`<div class="plart-e">🎵</div>`);return`<div class="plcard" onclick="openPlDet('${pl.id}')"><div class="plart">${art}</div><div class="plinfo"><div class="plname">${esc(pl.name)}</div><div class="plcount">${pl.tracks.length} track${pl.tracks.length!==1?'s':''}</div></div></div>`;}).join('')+`<div class="pl-new" onclick="openOv('newPlOv')"><div class="pl-new-ic">＋</div><span class="pl-new-lbl">New Playlist</span></div>`;}
@@ -1173,10 +1183,8 @@ function deletePl(){if(!confirm('Delete this playlist?'))return;pls=pls.filter(p
 function openAddToPl(){if(curIdx<0){showToast('Play a track first, then tap 🎵','inf');return;}openAddToPlFor(null,curIdx);}
 function openAddToPlFor(e,idx){if(e)e.stopPropagation();pendingAddIdx=idx;const t=queue[idx];if(!t)return;const el=document.getElementById('addToPlBody');if(!pls.length){el.innerHTML=`<div style="color:var(--tx2);font-size:13px;text-align:center;padding:16px 0">No playlists yet. Create one below!</div>`;}else{el.innerHTML=pls.map(pl=>`<div class="srow" onclick="addTrackToPl('${pl.id}')"><div class="sav" style="border-radius:9px;font-size:11px;width:32px;height:32px">🎵</div><div class="sav-info"><div class="sav-n">${esc(pl.name)}</div><div class="sav-e">${pl.tracks.length} tracks${pl.tracks.find(x=>x.id===t.id)?' · already added':''}</div></div><span style="color:${pl.tracks.find(x=>x.id===t.id)?'var(--green)':'var(--tx2)'};font-size:16px">${pl.tracks.find(x=>x.id===t.id)?'✓':'＋'}</span></div>`).join('');}openOv('addToPlOv');}
 function addTrackToPl(plId){const pl=pls.find(p=>p.id===plId);if(!pl)return;const t=queue[pendingAddIdx];if(!t)return;if(pl.tracks.find(x=>x.id===t.id)){showToast('Already in "'+pl.name+'"','inf');closeOv('addToPlOv');return;}pl.tracks.push({...t});addToLib(t);savePls();renderPls();closeOv('addToPlOv');showToast('Added to "'+pl.name+'" ✓','ok');pendingAddIdx=null;}
-function savePls(){if(user)S.s('aura_pl_'+user.id,pls);}
 
 /* ══ LIBRARY ══ */
-function saveLib(){if(user)S.s('aura_lib_'+user.id,lib);}
 function addToLib(track){if(!track||!track.id)return;if(!lib.find(t=>t.id===track.id)){lib.unshift({...track,addedAt:Date.now()});saveLib();}}
 function renderLib(){
 const el=document.getElementById('libList');
