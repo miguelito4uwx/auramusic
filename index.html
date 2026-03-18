@@ -322,14 +322,6 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 <div id="wbInner" style="background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3);backdrop-filter:blur(20px);border-radius:99px;padding:10px 22px;font-size:14px;font-weight:500;color:var(--tx);opacity:0;transform:translateY(-12px);transition:opacity .4s,transform .4s"></div>
 </div>
 
-<!-- VERSION BANNER -->
-
-<div id="versionBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:998;background:linear-gradient(135deg,rgba(124,58,237,.95),rgba(56,189,248,.9));padding:14px 20px;text-align:center;animation:tIn .4s ease">
-<div style="font-size:13px;font-weight:600;margin-bottom:4px">You're on an outdated version of Aura</div>
-<div style="font-size:11px;opacity:.85;line-height:1.5;margin-bottom:10px">Head to <strong>aura.miguelito4u.com</strong> and re-add it to your home screen. You'll keep all your data when you sign back in.</div>
-<a href="https://aura.miguelito4u.com" style="display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 16px;font-size:12px;font-weight:600;color:#fff;text-decoration:none">Go to aura.miguelito4u.com →</a>
-</div>
-
 <!-- INSTALL PROMPT PAGE -->
 
 <div class="page" id="installPromptPage">
@@ -754,9 +746,8 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 <div style="text-align:center;padding:8px 0 22px">
 <div style="font-size:26px;margin-bottom:12px">🔑</div>
 <div style="font-family:var(--fd);font-size:18px;font-weight:800;margin-bottom:10px">Forgot your password?</div>
-<div style="font-size:13px;color:var(--tx2);line-height:1.6;padding:0 4px">Enter your email on the sign in screen and we'll send you a reset link straight to your inbox.</div>
+<div style="font-size:13px;color:var(--tx2);line-height:1.6;padding:0 4px">Accounts are stored locally on your device so there's no automatic reset. Unfortunately your account data cannot be recovered.<br><br>You can <strong style="color:var(--tx)">create a new account</strong> with the same email to start fresh.</div>
 </div>
-<button class="btn-pr" onclick="doForgotPassword()" style="margin-bottom:10px">Send Reset Email 📧</button>
 <button class="btn-gh" onclick="closeOv('forgotOv')">Back to Sign In</button>
 </div>
 </div>
@@ -838,21 +829,7 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 </div>
 </div>
 
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, doc, setDoc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-
-/* ══ ERROR DISPLAY ══ */
-window.addEventListener('error', e=>{
-document.getElementById('loader').innerHTML=`<div style="color:#f87171;font-size:13px;padding:20px;text-align:center;max-width:320px"><strong>Error loading Aura</strong><br><br>${e.message}<br><br><button onclick="location.reload()" style="margin-top:12px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">Retry</button></div>`;
-document.getElementById('loader').classList.remove('out');
-});
-window.addEventListener('unhandledrejection', e=>{
-document.getElementById('loader').innerHTML=`<div style="color:#f87171;font-size:13px;padding:20px;text-align:center;max-width:320px"><strong>Error loading Aura</strong><br><br>${e.reason?.message||e.reason||'Unknown error'}<br><br><button onclick="location.reload()" style="margin-top:12px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">Retry</button></div>`;
-document.getElementById('loader').classList.remove('out');
-});
-
+<script>
 /* ══ SERVICE WORKER (blob) ══ */
 if('serviceWorker' in navigator){
 const sw=`
@@ -895,7 +872,7 @@ try{const l=document.createElement('link');l.rel='manifest';l.href=URL.createObj
 const S={g:k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}},s:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}},d:k=>localStorage.removeItem(k)};
 
 /* ══ STATE ══ */
-let user=null,queue=[],pls=[],favs={},prefs={},lib=[];
+let user=null,accounts=[],queue=[],pls=[],favs={},prefs={},lib=[];
 let curIdx=-1,playing=false,shuf=false,rep=false,curPlId=null;
 let ytPlayer=null,ytReady=false,progTimer=null,pendingAddIdx=null;
 let deferredPrompt=null,wakeLock=null;
@@ -952,142 +929,86 @@ if(!('mediaSession' in navigator)||!ytReady||!ytPlayer||!navigator.mediaSession.
 try{const p=ytPlayer.getCurrentTime()||0,d=ytPlayer.getDuration()||1;if(d>0)navigator.mediaSession.setPositionState({duration:d,playbackRate:1,position:Math.min(p,d)});}catch{}
 }
 
-/* ══ FIREBASE ══ */
-const APP_VERSION = '2.0.0';
-
-const firebaseConfig = {
-apiKey: "AIzaSyAwUcq3B_j5-AmodjwhOGUwlOQCqakLE84",
-authDomain: "aura-3db2c.firebaseapp.com",
-projectId: "aura-3db2c",
-storageBucket: "aura-3db2c.firebasestorage.app",
-messagingSenderId: "995525834452",
-appId: "1:995525834452:web:759e5f4dc117c9079ced41"
-};
-const fbApp = initializeApp(firebaseConfig);
-const auth = getAuth(fbApp);
-const db = getFirestore(fbApp);
-
 /* ══ BOOT ══ */
-setTimeout(()=>{
-console.log('BOOT: loader hiding');
-document.getElementById('loader').classList.add('out');
-try{boot();}catch(e){console.error('BOOT ERROR:',e);document.getElementById('loader').innerHTML=`<div style="color:#f87171;padding:20px;text-align:center;font-size:13px">Boot error: ${e.message}<br><br><button onclick="location.reload()" style="padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer">Retry</button></div>`;document.getElementById('loader').classList.remove('out');}
-},3200);
+window.onload=()=>{setTimeout(()=>{document.getElementById('loader').classList.add('out');boot();},3200);};
 function boot(){
-console.log('BOOT: started');
-prefs=S.g('aura_prefs')||{};
+accounts=S.g('aura_acc')||[];prefs=S.g('aura_prefs')||{};
 applyPrefs();buildSwatches();buildBgOps();buildFontOps();
-console.log('BOOT: prefs applied');
 if(!('wakeLock' in navigator))document.getElementById('wakeLockRow').style.display='none';
 const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';document.head.appendChild(sc);
-if(!isPWA()&&!S.g('aura_ip_seen')){console.log('BOOT: showing install prompt');document.getElementById('installPromptPage').classList.add('active');document.getElementById('ipLogo').textContent='aura';return;}
-console.log('BOOT: calling initAuth');
-initAuth();
-}
-function initAuth(){
-console.log('BOOT: initAuth called, showing auth');
+const last=S.g('aura_last');if(last){const a=accounts.find(x=>x.id===last);if(a){loginAs(a,true);return;}}
+// Show install prompt for non-PWA users who haven't seen it
+if(!isPWA()&&!S.g('aura_ip_seen')){document.getElementById('installPromptPage').classList.add('active');document.getElementById('ipLogo').textContent='aura';return;}
 showAuth();
-console.log('BOOT: calling onAuthStateChanged');
-onAuthStateChanged(auth, async fbUser=>{
-console.log('BOOT: auth state changed, user:', fbUser?.email||'none');
-if(fbUser){await loadUserData(fbUser);}
+}
+function dismissInstallPrompt(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');showAuth();}
+function proceedWithoutInstall(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');showAuth();}
+window.onYouTubeIframeAPIReady=function(){
+ytPlayer=new YT.Player('ytplayer',{height:'1',width:'1',
+playerVars:{autoplay:0,controls:0,rel:0,playsinline:1,enablejsapi:1,origin:location.origin||''},
+events:{
+onReady:()=>{ytReady=true;setVol(prefs.vol||80);},
+onStateChange:e=>{
+if(e.data===YT.PlayerState.PLAYING){playing=true;updBtns();startVis();startProg();setMSState('playing');if(prefs.wakeLock)acquireWakeLock();startSilentAudio();}
+else if(e.data===YT.PlayerState.PAUSED){playing=false;updBtns();stopVis();clearInterval(progTimer);setMSState('paused');if(!prefs.wakeLock)releaseWakeLock();stopSilentAudio();}
+else if(e.data===YT.PlayerState.ENDED){playing=false;stopVis();clearInterval(progTimer);setMSState('none');releaseWakeLock();stopSilentAudio();onEnded();}
+},
+onError:e=>{const m={2:'Bad video ID',5:'HTML5 error',100:'Video not found',101:'Embed disabled',150:'Embed disabled'};showToast('Cannot play: '+(m[e.data]||'Error '+e.data),'err');playing=false;updBtns();stopVis();}
+}
 });
-}
-function dismissInstallPrompt(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');initAuth();}
-function proceedWithoutInstall(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');initAuth();}
-
-async function loadUserData(fbUser){
-try{
-const snap = await getDoc(doc(db,'users',fbUser.uid));
-let data = snap.exists() ? snap.data() : {};
-user = {
-id: fbUser.uid,
-email: fbUser.email,
-name: data.name || fbUser.email.split('@')[0],
-pic: data.pic || null,
-guest: false,
-isNew: !snap.exists()
 };
-queue = data.queue || [];
-pls = data.playlists || [];
-favs = data.favs || {};
-lib = data.library || [];
-// Check version
-checkVersion(data.appVersion);
-loginAs(user, true);
-// Save user doc if new
-if(!snap.exists()){
-await setDoc(doc(db,'users',fbUser.uid),{name:user.name,email:user.email,queue:[],playlists:[],favs:{},library:[],appVersion:APP_VERSION,createdAt:Date.now()});
+function onEnded(){if(rep){ytPlayer.seekTo(0);ytPlayer.playVideo();return;}if(prefs.autoplay!==false)nextTrack();}
+
+/* ══ SILENT AUDIO KEEPALIVE ══
+Tricks the OS into keeping the audio process alive
+when the screen locks, enabling background playback. */
+let silentAudio=null;
+function startSilentAudio(){
+if(silentAudio)return;
+const silentMp3='data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsgU291bmQgRWZmZWN0cwB3d3cuYmlnc291bmRiYW5rLmNvbQBURU5DAAAAHQAAA1N3aXRjaCBTb3VuZHMAd3d3LmJpZ3NvdW5kYmFuay5jb20AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+silentAudio=new Audio(silentMp3);
+silentAudio.loop=true;
+silentAudio.volume=0.001;
+silentAudio.play().catch(()=>{});
 }
-} catch(e){
-showToast('Error loading data. Check connection.','err');
-showAuth();
-}
+function stopSilentAudio(){
+if(silentAudio){silentAudio.pause();silentAudio.src='';silentAudio=null;}
 }
 
-function checkVersion(storedVersion){
-if(storedVersion && storedVersion !== APP_VERSION){
-showVersionBanner();
-}
-}
-function showVersionBanner(){
-const b = document.getElementById('versionBanner');
-if(b) b.style.display='block';
-}
+/* ══ ONBOARDING ══ */
+let obStep=0;const OBT=6;
+function startOnboarding(name){document.getElementById('obHi').textContent='Hey '+name+'!';obStep=0;buildObDots();showObStep(0);document.getElementById('onboarding').classList.add('active');}
+function buildObDots(){document.getElementById('obDots').innerHTML=Array.from({length:OBT},(_,i)=>`<div class="ob-dot ${i===0?'on':''}" id="obdot${i}"></div>`).join('');}
+function showObStep(n){document.querySelectorAll('.ob-step').forEach(s=>s.classList.remove('show'));const s=document.querySelector(`.ob-step[data-step="${n}"]`);if(s)s.classList.add('show');for(let i=0;i<OBT;i++){const d=document.getElementById('obdot'+i);if(d)d.classList.toggle('on',i===n);}document.getElementById('obBtn').textContent=n>=OBT-1?'Get Started 🎵':'Next →';}
+function obNext(){obStep++;if(obStep>=OBT){obFinish();return;}showObStep(obStep);}
+function obFinish(){document.getElementById('onboarding').classList.remove('active');if(user)S.s('aura_ob_'+user.id,true);}
 
 /* ══ AUTH ══ */
 function showAuth(){document.getElementById('authPage').classList.add('active');document.getElementById('app').classList.remove('on');renderSaved();}
-function renderSaved(){
-// Show last signed in email hint
-const lastEmail = S.g('aura_last_email');
-const w = document.getElementById('savedWrap');
-if(!lastEmail){w.classList.add('hidden');return;}
-w.classList.remove('hidden');
-document.getElementById('savedList').innerHTML=`<div class="srow" onclick="document.getElementById('aEmail').value='${lastEmail}';document.getElementById('aPass').focus()"><div class="sav">${lastEmail[0].toUpperCase()}</div><div class="sav-info"><div class="sav-n">${lastEmail}</div><div class="sav-e">Tap to fill in</div></div><span style="color:var(--tx2);font-size:18px">›</span></div>`;
-}
+function renderSaved(){const real=accounts.filter(a=>!a.guest);const w=document.getElementById('savedWrap');if(!real.length){w.classList.add('hidden');return;}w.classList.remove('hidden');document.getElementById('savedList').innerHTML=real.map(a=>`<div class="srow" onclick="quickLogin('${a.id}')"><div class="sav">${a.name[0].toUpperCase()}</div><div class="sav-info"><div class="sav-n">${esc(a.name)}</div><div class="sav-e">${esc(a.email)}</div></div><span style="color:var(--tx2);font-size:18px">›</span></div>`).join('');}
+function quickLogin(id){const a=accounts.find(x=>x.id===id);if(a)loginAs(a);}
 function authTab(t){document.getElementById('atab-in').classList.toggle('on',t==='in');document.getElementById('atab-up').classList.toggle('on',t==='up');document.getElementById('aNameG').classList.toggle('hidden',t==='in');document.getElementById('forgotWrap').style.display=t==='in'?'':'none';document.getElementById('noTosWrap').classList.toggle('hidden',t==='in');document.getElementById('aBtn').textContent=t==='in'?'Sign In':'Proceed to Aura →';document.getElementById('aErr').textContent='';}
-async function doAuth(){
+function doAuth(){
 const email=document.getElementById('aEmail').value.trim().toLowerCase();
 const pass=document.getElementById('aPass').value;
 const isUp=document.getElementById('atab-up').classList.contains('on');
 const err=document.getElementById('aErr');
-const btn=document.getElementById('aBtn');
 if(!email||!pass){err.textContent='Fill all fields.';return;}
 if(!/\S+@\S+\.\S+/.test(email)){err.textContent='Invalid email.';return;}
-if(pass.length<6){err.textContent='Password too short (min 6).';return;}
-btn.textContent='⏳';btn.disabled=true;err.textContent='';
-try{
-if(isUp){
-const name=document.getElementById('aName').value.trim()||email.split('@')[0];
-const cred = await createUserWithEmailAndPassword(auth,email,pass);
-await setDoc(doc(db,'users',cred.user.uid),{name,email,queue:[],playlists:[],favs:{},library:[],appVersion:APP_VERSION,createdAt:Date.now()});
-S.s('aura_last_email',email);
-} else {
-await signInWithEmailAndPassword(auth,email,pass);
-S.s('aura_last_email',email);
+if(pass.length<4){err.textContent='Password too short (min 4).';return;}
+if(isUp){if(accounts.find(a=>a.email===email&&!a.guest)){err.textContent='Account exists. Sign in instead.';return;}const name=document.getElementById('aName').value.trim()||email.split('@')[0];const a={id:'u'+Date.now(),email,name,ph:hash(pass),guest:false,isNew:true};accounts.push(a);S.s('aura_acc',accounts);loginAs(a);}
+else{const a=accounts.find(x=>x.email===email&&!x.guest);if(!a){err.textContent='No account found.';return;}if(a.ph!==hash(pass)){err.textContent='Wrong password.';return;}loginAs(a);}
 }
-} catch(e){
-const msgs={'auth/user-not-found':'No account found.','auth/wrong-password':'Wrong password.','auth/email-already-in-use':'Account exists. Sign in instead.','auth/weak-password':'Password too short (min 6).','auth/invalid-email':'Invalid email.','auth/invalid-credential':'Wrong email or password.'};
-err.textContent=msgs[e.code]||'Something went wrong.';
-}
-btn.textContent=isUp?'Proceed to Aura →':'Sign In';btn.disabled=false;
-}
-async function doForgotPassword(){
-const email=document.getElementById('aEmail').value.trim().toLowerCase();
-if(!email){showToast('Enter your email first','err');return;}
-try{await sendPasswordResetEmail(auth,email);showToast('Reset email sent! Check your inbox ✓','ok');closeOv('forgotOv');}
-catch(e){showToast('Could not send reset email','err');}
-}
-function guestLogin(){user={id:'guest_'+Date.now(),email:'guest',name:'Guest',pic:null,guest:true};queue=[];pls=[];favs={};lib=[];loginAs(user,false);}
+function guestLogin(){let g=accounts.find(a=>a.guest);if(!g){g={id:'g'+Date.now(),email:'guest',name:'Guest',ph:'',guest:true};accounts.push(g);S.s('aura_acc',accounts);}loginAs(g);}
 function loginAs(a,silent=false){
-user=a;
+user=a;S.s('aura_last',a.id);queue=S.g('aura_q_'+a.id)||[];pls=S.g('aura_pl_'+a.id)||[];favs=S.g('aura_fav_'+a.id)||{};lib=S.g('aura_lib_'+a.id)||[];
 document.getElementById('authPage').classList.remove('active');document.getElementById('app').classList.add('on');
 document.querySelector('.botbar').classList.add('visible');
 renderAccRow();renderQ();renderPls();updateAppName();
 document.getElementById('togWakeLock').checked=!!prefs.wakeLock;
 if(prefs.wakeLock)startDim();
-if(queue.length&&prefs.remQ!==false){curIdx=0;updatePlayerUI(queue[0]);document.getElementById('mini').classList.add('on');}
-if(a.isNew&&!S.g('aura_ob_'+a.id)){a.isNew=false;setTimeout(()=>startOnboarding(a.name),600);}
+if(queue.length&&prefs.remQ!==false){const ci=S.g('aura_ci_'+a.id);if(ci!=null&&ci>=0&&ci<queue.length){curIdx=ci;updatePlayerUI(queue[ci]);document.getElementById('mini').classList.add('on');}}
+if(a.isNew&&!S.g('aura_ob_'+a.id)){a.isNew=false;S.s('aura_acc',accounts);setTimeout(()=>startOnboarding(a.name),600);}
 else{if(!a.guest)showWelcomeBack(a.name);maybeShowWelcome();}
 }
 function showWelcomeBack(name){
@@ -1098,37 +1019,13 @@ wrap.style.display='flex';
 requestAnimationFrame(()=>requestAnimationFrame(()=>{inner.style.opacity='1';inner.style.transform='translateY(0)';}));
 setTimeout(()=>{inner.style.opacity='0';inner.style.transform='translateY(-12px)';setTimeout(()=>{wrap.style.display='none';},400);},2200);
 }
-async function doLogout(){
-stopTrack();releaseWakeLock();hideDim();
-if(!user.guest){try{await signOut(auth);}catch{}}
-user=null;curIdx=-1;playing=false;queue=[];pls=[];lib=[];
-document.getElementById('mini').classList.remove('on');
-document.getElementById('pcard').classList.add('hidden');
-document.getElementById('playerEmpty').classList.remove('hidden');
-document.querySelector('.botbar').classList.remove('visible');
-goTab('home');showAuth();
-}
-function openAccOv(){const av=user.pic?`<div class="sav" style="background:url('${user.pic}') center/cover"></div>`:`<div class="sav">${(user.name||'?')[0].toUpperCase()}</div>`;document.getElementById('accOvList').innerHTML=`<div class="srow"><div class="sav-info"><div class="sav-n">${esc(user.name)}</div><div class="sav-e">${esc(user.email)}</div></div></div>`;openOv('accOv');}
-function renderAccRow(){if(!user)return;const av=user.pic?`<div class="acc-av" style="background:url('${user.pic}') center/cover"></div>`:`<div class="acc-av">${(user.name||'?')[0].toUpperCase()}</div>`;document.getElementById('accRow').innerHTML=`<div class="acc-setrow">${av}<div class="acc-info"><div class="acc-n">${esc(user.name)}</div><div class="acc-e">${esc(user.email)}</div></div><button class="acc-out" onclick="doLogout()">Sign Out</button></div>`;}
+function doLogout(){stopTrack();releaseWakeLock();user=null;S.d('aura_last');curIdx=-1;playing=false;queue=[];pls=[];lib=[];document.getElementById('mini').classList.remove('on');document.getElementById('pcard').classList.add('hidden');document.getElementById('playerEmpty').classList.remove('hidden');document.querySelector('.botbar').classList.remove('visible');goTab('home');showAuth();}
+function openAccOv(){document.getElementById('accOvList').innerHTML=accounts.filter(a=>!a.guest).map(a=>`<div class="srow" onclick="quickLogin('${a.id}');closeOv('accOv')"><div class="sav" style="${a.pic?`background:url('${a.pic}') center/cover;color:transparent`:''}"> ${a.pic?'':a.name[0].toUpperCase()}</div><div class="sav-info"><div class="sav-n">${esc(a.name)}</div><div class="sav-e">${esc(a.email)}</div></div>${user&&user.id===a.id?'<span style="color:var(--a);font-size:10px;font-weight:600">Active</span>':'<span style="color:var(--tx2);font-size:18px">›</span>'}</div>`).join('');openOv('accOv');}
+function renderAccRow(){if(!user)return;const av=user.pic?`<div class="acc-av" style="background:url('${user.pic}') center/cover"></div>`:`<div class="acc-av">${user.name[0].toUpperCase()}</div>`;document.getElementById('accRow').innerHTML=`<div class="acc-setrow">${av}<div class="acc-info"><div class="acc-n">${esc(user.name)}</div><div class="acc-e">${esc(user.email)}</div></div><button class="acc-out" onclick="doLogout()">Sign Out</button></div>`;}
 function openChangePic(){document.getElementById('picFilePick').click();}
-async function handlePicFile(input){const file=input.files[0];if(!file||!user)return;const r=new FileReader();r.onload=async e=>{user.pic=e.target.result;renderAccRow();if(!user.guest){try{await updateDoc(doc(db,'users',user.id),{pic:user.pic});}catch{}}showToast('Profile photo updated ✓','ok');};r.readAsDataURL(file);input.value='';}
+function handlePicFile(input){const file=input.files[0];if(!file||!user)return;const r=new FileReader();r.onload=e=>{user.pic=e.target.result;const idx=accounts.findIndex(a=>a.id===user.id);if(idx>-1)accounts[idx].pic=user.pic;S.s('aura_acc',accounts);renderAccRow();showToast('Profile photo updated ✓','ok');};r.readAsDataURL(file);input.value='';}
 function replayTips(){if(user)S.d('aura_ob_'+user.id);startOnboarding(user?user.name:'there');}
-
-/* ══ CLOUD SAVE ══ */
-let saveTimer=null;
-function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(cloudSave,1500);}
-async function cloudSave(){
-if(!user||user.guest)return;
-try{
-await updateDoc(doc(db,'users',user.id),{queue,playlists:pls,favs,library:lib,appVersion:APP_VERSION,lastSaved:Date.now()});
-}catch(e){console.warn('Save failed:',e);}
-}
-function saveQ(){if(user&&prefs.remQ!==false){S.s('aura_q_'+user.id,queue);scheduleSave();}}
-function savePls(){if(user){S.s('aura_pl_'+user.id,pls);scheduleSave();}}
-function saveLib(){if(user){S.s('aura_lib_'+user.id,lib);scheduleSave();}}
-function saveFavs(){if(user){S.s('aura_fav_'+user.id,favs);scheduleSave();}}
-
-
+const hash=s=>{let h=0;for(const c of s)h=Math.imul(31,h)+c.charCodeAt(0)|0;return h.toString(36);};
 
 /* ══ TABS ══ */
 function goTab(t){['home','playlists','pldet','settings','library','search'].forEach(id=>{const el=document.getElementById('tab-'+id);if(el)el.classList.toggle('on',id===t);});['home','playlists','settings','library','search'].forEach(id=>{const b=document.getElementById('tb-'+id);if(b)b.classList.toggle('on',id===t||(t==='pldet'&&id==='playlists'));});if(t==='playlists')renderPls();if(t==='library')renderLib();if(t==='search')document.getElementById('srchIn').focus();}
@@ -1154,27 +1051,27 @@ function prevTrack(){if(queue.length)playTrack(curIdx>0?curIdx-1:queue.length-1)
 function nextTrack(){if(!queue.length)return;if(shuf){let n;do{n=Math.floor(Math.random()*queue.length)}while(queue.length>1&&n===curIdx);playTrack(n);}else playTrack(curIdx<queue.length-1?curIdx+1:0);}
 function toggleShuf(){shuf=!shuf;document.getElementById('shufBtn').classList.toggle('on',shuf);}
 function toggleRep(){rep=!rep;document.getElementById('repBtn').classList.toggle('on',rep);}
-function toggleFav(){if(curIdx<0)return;const id=queue[curIdx].id;favs[id]=!favs[id];document.getElementById('favBtn').textContent=favs[id]?'❤️':'🤍';document.getElementById('favBtn').classList.toggle('fav-on',favs[id]);if(user)saveFavs();}
+function toggleFav(){if(curIdx<0)return;const id=queue[curIdx].id;favs[id]=!favs[id];document.getElementById('favBtn').textContent=favs[id]?'❤️':'🤍';document.getElementById('favBtn').classList.toggle('fav-on',favs[id]);if(user)S.s('aura_fav_'+user.id,favs);}
 function updBtns(){const ic=playing?'⏸':'▶';document.getElementById('playBtn').textContent=ic;document.getElementById('miniPlay').textContent=ic;}
 function setVol(v){v=parseInt(v);if(ytReady&&ytPlayer&&ytPlayer.setVolume)ytPlayer.setVolume(v);document.getElementById('volic').textContent=v===0?'🔇':v<40?'🔉':'🔊';document.getElementById('vslide').value=v;document.getElementById('vslide').style.background=`linear-gradient(90deg,var(--p) ${v}%,rgba(255,255,255,.1) ${v}%)`;prefs.vol=v;savePrefs();}
-try{document.getElementById('vslide').addEventListener('input',e=>setVol(e.target.value));
-document.getElementById('vslide').style.background='linear-gradient(90deg,var(--p) 80%,rgba(255,255,255,.1) 80%)';}catch{}
-
+document.getElementById('vslide').addEventListener('input',e=>setVol(e.target.value));
+document.getElementById('vslide').style.background='linear-gradient(90deg,var(--p) 80%,rgba(255,255,255,.1) 80%)';
 function startProg(){clearInterval(progTimer);progTimer=setInterval(()=>{if(!ytReady||!ytPlayer||!ytPlayer.getCurrentTime)return;try{const c=ytPlayer.getCurrentTime()||0,d=ytPlayer.getDuration()||1,pct=(c/d)*100;document.getElementById('progB').style.width=pct+'%';document.getElementById('progTip').style.left=pct+'%';document.getElementById('minipb').style.width=pct+'%';document.getElementById('tNow').textContent=fmt(c);document.getElementById('tDur').textContent=fmt(d);setMSPos();}catch{}},500);}
 function resetProg(){['progB','minipb'].forEach(id=>{document.getElementById(id).style.width='0%'});document.getElementById('progTip').style.left='0%';document.getElementById('tNow').textContent='0:00';document.getElementById('tDur').textContent='—';}
-try{document.getElementById('progW').addEventListener('click',e=>{if(!ytReady||!ytPlayer)return;try{const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width,d=ytPlayer.getDuration();if(d)ytPlayer.seekTo(pct*d,true);}catch{}});}catch{}
+document.getElementById('progW').addEventListener('click',e=>{if(!ytReady||!ytPlayer)return;try{const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width,d=ytPlayer.getDuration();if(d)ytPlayer.seekTo(pct*d,true);}catch{}});
 const fmt=s=>{s=Math.floor(s||0);const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
 
 /* ══ ADD TRACK ══ */
 function getVid(url){url=(url||'').trim();try{const u=new URL(url.startsWith('http')?url:'https://'+url);if(u.hostname.includes('youtu.be'))return u.pathname.slice(1).split(/[?&]/)[0];const v=u.searchParams.get('v');if(v)return v;}catch{}const m=url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);return m?m[1]:null;}
 async function fetchInfo(id){try{const r=await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);if(r.ok){const d=await r.json();return{id,title:d.title||'Track',channel:d.author_name||'Unknown',thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`};}}catch{}return{id,title:'YouTube Track',channel:'Unknown',thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`};}
 async function handleAdd(){const raw=document.getElementById('urlIn').value.trim();if(!raw){showToast('Paste a YouTube link first.','err');return;}const id=getVid(raw);if(!id){showToast('Not a valid YouTube link.','err');return;}if(queue.find(t=>t.id===id)){showToast('Already in queue!','inf');return;}showToast('Loading…','inf');const btn=document.getElementById('addBtn');btn.textContent='⏳';btn.disabled=true;const info=await fetchInfo(id);queue.push(info);addToLib(info);document.getElementById('urlIn').value='';clearToast();btn.textContent='➕';btn.disabled=false;saveQ();renderQ();if(curIdx===-1)playTrack(queue.length-1);}
-try{document.getElementById('urlIn').addEventListener('keydown',e=>{if(e.key==='Enter')handleAdd();});}catch{}
+document.getElementById('urlIn').addEventListener('keydown',e=>{if(e.key==='Enter')handleAdd();});
 
 /* ══ QUEUE ══ */
 function renderQ(){const el=document.getElementById('qlist');document.getElementById('qCount').textContent=queue.length?`(${queue.length})`:'';if(!queue.length){el.innerHTML=`<div class="empty"><div class="eic">🎧</div><div class="etx">Paste a YouTube link above<br>to start your queue</div></div>`;return;}el.innerHTML=queue.map((t,i)=>`<div class="qi ${i===curIdx?'on':''}" onclick="playTrack(${i})"><div class="qnum ${i===curIdx?'on':''}">${i===curIdx?'♫':i+1}</div><img class="qthumb" src="${esc(t.thumb)}" alt="" loading="lazy"><div class="qinfo"><div class="qtitle">${esc(t.title)}</div><div class="qch">${esc(t.channel)}</div></div><div class="q-acts"><button class="q-act" onclick="openAddToPlFor(event,${i})" title="Add to playlist">🎵</button><button class="q-act rm" onclick="rmQ(event,${i})" title="Remove">✕</button></div></div>`).join('');}
 function rmQ(e,i){e.stopPropagation();queue.splice(i,1);if(i===curIdx){if(queue.length)playTrack(Math.min(i,queue.length-1));else{curIdx=-1;stopTrack();document.getElementById('pcard').classList.add('hidden');document.getElementById('playerEmpty').classList.remove('hidden');document.getElementById('mini').classList.remove('on');}}else if(curIdx>i)curIdx--;saveQ();renderQ();}
 function clearQueue(){queue=[];curIdx=-1;stopTrack();document.getElementById('pcard').classList.add('hidden');document.getElementById('playerEmpty').classList.remove('hidden');document.getElementById('mini').classList.remove('on');saveQ();renderQ();}
+function saveQ(){if(user&&prefs.remQ!==false)S.s('aura_q_'+user.id,queue);}
 
 /* ══ PLAYLISTS ══ */
 function renderPls(){const g=document.getElementById('plgrid');g.innerHTML=pls.map(pl=>{const art=pl.cover?`<img src="${esc(pl.cover)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" alt="" onerror="this.style.display='none'">`:(pl.tracks.length>=4?`<div class="plart-g">${pl.tracks.slice(0,4).map(t=>`<img src="${esc(t.thumb)}" alt="">`).join('')}</div>`:pl.tracks[0]?`<img src="${esc(pl.tracks[0].thumb)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" alt="">`:`<div class="plart-e">🎵</div>`);return`<div class="plcard" onclick="openPlDet('${pl.id}')"><div class="plart">${art}</div><div class="plinfo"><div class="plname">${esc(pl.name)}</div><div class="plcount">${pl.tracks.length} track${pl.tracks.length!==1?'s':''}</div></div></div>`;}).join('')+`<div class="pl-new" onclick="openOv('newPlOv')"><div class="pl-new-ic">＋</div><span class="pl-new-lbl">New Playlist</span></div>`;}
@@ -1192,8 +1089,10 @@ function deletePl(){if(!confirm('Delete this playlist?'))return;pls=pls.filter(p
 function openAddToPl(){if(curIdx<0){showToast('Play a track first, then tap 🎵','inf');return;}openAddToPlFor(null,curIdx);}
 function openAddToPlFor(e,idx){if(e)e.stopPropagation();pendingAddIdx=idx;const t=queue[idx];if(!t)return;const el=document.getElementById('addToPlBody');if(!pls.length){el.innerHTML=`<div style="color:var(--tx2);font-size:13px;text-align:center;padding:16px 0">No playlists yet. Create one below!</div>`;}else{el.innerHTML=pls.map(pl=>`<div class="srow" onclick="addTrackToPl('${pl.id}')"><div class="sav" style="border-radius:9px;font-size:11px;width:32px;height:32px">🎵</div><div class="sav-info"><div class="sav-n">${esc(pl.name)}</div><div class="sav-e">${pl.tracks.length} tracks${pl.tracks.find(x=>x.id===t.id)?' · already added':''}</div></div><span style="color:${pl.tracks.find(x=>x.id===t.id)?'var(--green)':'var(--tx2)'};font-size:16px">${pl.tracks.find(x=>x.id===t.id)?'✓':'＋'}</span></div>`).join('');}openOv('addToPlOv');}
 function addTrackToPl(plId){const pl=pls.find(p=>p.id===plId);if(!pl)return;const t=queue[pendingAddIdx];if(!t)return;if(pl.tracks.find(x=>x.id===t.id)){showToast('Already in "'+pl.name+'"','inf');closeOv('addToPlOv');return;}pl.tracks.push({...t});addToLib(t);savePls();renderPls();closeOv('addToPlOv');showToast('Added to "'+pl.name+'" ✓','ok');pendingAddIdx=null;}
+function savePls(){if(user)S.s('aura_pl_'+user.id,pls);}
 
 /* ══ LIBRARY ══ */
+function saveLib(){if(user)S.s('aura_lib_'+user.id,lib);}
 function addToLib(track){if(!track||!track.id)return;if(!lib.find(t=>t.id===track.id)){lib.unshift({...track,addedAt:Date.now()});saveLib();}}
 function renderLib(){
 const el=document.getElementById('libList');
@@ -1323,14 +1222,6 @@ document.addEventListener('mouseup',onUp);
 }
 
 /* ══ WHAT'S NEW ══ */
-/* ══ ONBOARDING ══ */
-let obStep=0;const OBT=6;
-function startOnboarding(name){document.getElementById('obHi').textContent='Hey '+name+'!';obStep=0;buildObDots();showObStep(0);document.getElementById('onboarding').classList.add('active');}
-function buildObDots(){document.getElementById('obDots').innerHTML=Array.from({length:OBT},(_,i)=>`<div class="ob-dot ${i===0?'on':''}" id="obdot${i}"></div>`).join('');}
-function showObStep(n){document.querySelectorAll('.ob-step').forEach(s=>s.classList.remove('show'));const s=document.querySelector(`.ob-step[data-step="${n}"]`);if(s)s.classList.add('show');for(let i=0;i<OBT;i++){const d=document.getElementById('obdot'+i);if(d)d.classList.toggle('on',i===n);}document.getElementById('obBtn').textContent=n>=OBT-1?'Get Started 🎵':'Next →';}
-function obNext(){obStep++;if(obStep>=OBT){obFinish();return;}showObStep(obStep);}
-function obFinish(){document.getElementById('onboarding').classList.remove('active');if(user)S.s('aura_ob_'+user.id,true);}
-
 const WHATS_NEW_KEY='aura_wn_v4';
 const WELCOME_KEY='aura_welcome_v1';
 function maybeShowWhatsNew(){if(!S.g(WHATS_NEW_KEY)){S.s(WHATS_NEW_KEY,true);setTimeout(()=>openOv('whatsNewOv'),700);}}
@@ -1338,10 +1229,8 @@ function maybeShowWelcome(){if(!S.g(WELCOME_KEY)){S.s(WELCOME_KEY,true);setTimeo
 function closeWelcome(){closeOv('welcomeOv');maybeShowWhatsNew();}
 
 /* ══ VISUALIZER ══ */
-try{
 const visEl=document.getElementById('vis');const vbars=[];
 for(let i=0;i<26;i++){const b=document.createElement('div');b.className='vb';b.mn=Math.random()*3+2;b.mx=Math.random()*16+8;b.v=b.mn;b.d=1;b.style.height=b.mn+'px';visEl.appendChild(b);vbars.push(b);}
-}catch{}
 let visT=null;
 function startVis(){if(!document.getElementById('togVis').checked||visT)return;visT=setInterval(()=>vbars.forEach(b=>{b.v+=b.d*(Math.random()*1.6+.3);if(b.v>=b.mx){b.d=-1;b.v=b.mx;}if(b.v<=b.mn){b.d=1;b.v=b.mn;}b.style.height=b.v+'px';}),80);}
 function stopVis(){clearInterval(visT);visT=null;vbars.forEach(b=>b.style.height=b.mn+'px');}
@@ -1365,7 +1254,7 @@ function savePrefs(){prefs.autoplay=document.getElementById('togAuto').checked;p
 /* ══ MODALS ══ */
 function openOv(id){document.getElementById(id).classList.add('on');}
 function closeOv(id){document.getElementById(id).classList.remove('on');}
-try{document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));}catch{}
+document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));
 
 /* ══ TOAST ══ */
 let toastT=null;
@@ -1373,36 +1262,17 @@ function showToast(msg,type){const el=document.getElementById('toast');el.textCo
 function clearToast(){const el=document.getElementById('toast');el.className='toast';el.textContent='';}
 
 /* ══ DATA ══ */
-function exportData(){const d={user:{name:user?.name,email:user?.email},playlists:pls,queue,library:lib,prefs};const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='aura-data.json';a.click();}
+function exportData(){const d={accounts:accounts.map(a=>({...a,ph:'[hidden]'})),playlists:pls,queue,prefs};const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='aura-data.json';a.click();}
 function nukeData(){if(!confirm('Delete everything? Cannot be undone.'))return;localStorage.clear();location.reload();}
 
 /* ══ UTIL ══ */
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-
-/* ══ EXPOSE GLOBALS (required for module scope) ══ */
-Object.assign(window,{
-authTab,doAuth,guestLogin,doLogout,doForgotPassword,
-goTab,openOv,closeOv,closeWelcome,
-handleAdd,playTrack,prevTrack,nextTrack,togglePlay,toggleShuf,toggleRep,toggleFav,
-setVol,rmQ,clearQueue,savePrefs,setVisToggle,toggleWakeLock,
-renderLib,playFromLib,playLibAll,removeFromLib,addToPlFromLib,openEditTrack,handleTrackThumb,saveTrackEdit,
-openAddToPl,openAddToPlFor,addTrackToPl,createPl,openPlDet,openEditPl,saveEditPl,deletePl,rmPlTrack,playPlTrack,
-handleCoverFile,previewCover,clearCover,
-openAccOv,openChangePic,handlePicFile,replayTips,
-setAccent,setBg,setFont,applyHex,buildSwatches,buildBgOps,buildFontOps,
-exportData,nukeData,
-doSearch,addFromSearch,
-obNext,obFinish,
-triggerInstall,dismissInstallBanner,dismissInstallPrompt,proceedWithoutInstall,
-dismissBgBanner,
-});
-
 renderQ();
 </script>
 
 </body>
 </html>
-On Wed, Mar 18, 2026 at 12:20 AM Miguel Hernandez <fernandezmiguelito70@gmail.com> wrote:
+On Wed, Mar 18, 2026 at 12:26 AM Miguel Hernandez <fernandezmiguelito70@gmail.com> wrote:
 <!DOCTYPE html>
 
 <html lang="en">
