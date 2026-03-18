@@ -993,6 +993,8 @@ console.log('BOOT: auth state changed, user:', fbUser?.email||'none');
 if(fbUser){await loadUserData(fbUser);}
 });
 }
+function dismissInstallPrompt(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');initAuth();}
+function proceedWithoutInstall(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');initAuth();}
 
 async function loadUserData(fbUser){
 try{
@@ -1400,7 +1402,7 @@ renderQ();
 
 </body>
 </html>
-On Wed, Mar 18, 2026 at 12:14 AM Miguel Hernandez <fernandezmiguelito70@gmail.com> wrote:
+On Wed, Mar 18, 2026 at 12:20 AM Miguel Hernandez <fernandezmiguelito70@gmail.com> wrote:
 <!DOCTYPE html>
 
 <html lang="en">
@@ -2222,4 +2224,4 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 </div>
 <div style="background:var(--c1);border:1px solid var(--br);border-radius:14px;padding:14px;display:flex;align-items:flex-start;gap:12px">
 <div style="font-size:22px;flex-shrink:0;margin-top:1px">🖼️</div>
-<div><div style="font-size:13px;font-weight:700;margin-bottom
+<div><div style="font-size:13px;font-weight:700;margin-
