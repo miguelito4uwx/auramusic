@@ -968,7 +968,7 @@ const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
 
 /* ══ BOOT ══ */
-document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{document.getElementById('loader').classList.add('out');boot();},3200)});
+setTimeout(()=>{document.getElementById('loader').classList.add('out');boot();},3200);
 function boot(){
 prefs=S.g('aura_prefs')||{};
 applyPrefs();buildSwatches();buildBgOps();buildFontOps();
@@ -1149,18 +1149,19 @@ function toggleRep(){rep=!rep;document.getElementById('repBtn').classList.toggle
 function toggleFav(){if(curIdx<0)return;const id=queue[curIdx].id;favs[id]=!favs[id];document.getElementById('favBtn').textContent=favs[id]?'❤️':'🤍';document.getElementById('favBtn').classList.toggle('fav-on',favs[id]);if(user)saveFavs();}
 function updBtns(){const ic=playing?'⏸':'▶';document.getElementById('playBtn').textContent=ic;document.getElementById('miniPlay').textContent=ic;}
 function setVol(v){v=parseInt(v);if(ytReady&&ytPlayer&&ytPlayer.setVolume)ytPlayer.setVolume(v);document.getElementById('volic').textContent=v===0?'🔇':v<40?'🔉':'🔊';document.getElementById('vslide').value=v;document.getElementById('vslide').style.background=`linear-gradient(90deg,var(--p) ${v}%,rgba(255,255,255,.1) ${v}%)`;prefs.vol=v;savePrefs();}
-document.getElementById('vslide').addEventListener('input',e=>setVol(e.target.value));
-document.getElementById('vslide').style.background='linear-gradient(90deg,var(--p) 80%,rgba(255,255,255,.1) 80%)';
+try{document.getElementById('vslide').addEventListener('input',e=>setVol(e.target.value));
+document.getElementById('vslide').style.background='linear-gradient(90deg,var(--p) 80%,rgba(255,255,255,.1) 80%)';}catch{}
+
 function startProg(){clearInterval(progTimer);progTimer=setInterval(()=>{if(!ytReady||!ytPlayer||!ytPlayer.getCurrentTime)return;try{const c=ytPlayer.getCurrentTime()||0,d=ytPlayer.getDuration()||1,pct=(c/d)*100;document.getElementById('progB').style.width=pct+'%';document.getElementById('progTip').style.left=pct+'%';document.getElementById('minipb').style.width=pct+'%';document.getElementById('tNow').textContent=fmt(c);document.getElementById('tDur').textContent=fmt(d);setMSPos();}catch{}},500);}
 function resetProg(){['progB','minipb'].forEach(id=>{document.getElementById(id).style.width='0%'});document.getElementById('progTip').style.left='0%';document.getElementById('tNow').textContent='0:00';document.getElementById('tDur').textContent='—';}
-document.getElementById('progW').addEventListener('click',e=>{if(!ytReady||!ytPlayer)return;try{const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width,d=ytPlayer.getDuration();if(d)ytPlayer.seekTo(pct*d,true);}catch{}});
+try{document.getElementById('progW').addEventListener('click',e=>{if(!ytReady||!ytPlayer)return;try{const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width,d=ytPlayer.getDuration();if(d)ytPlayer.seekTo(pct*d,true);}catch{}});}catch{}
 const fmt=s=>{s=Math.floor(s||0);const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
 
 /* ══ ADD TRACK ══ */
 function getVid(url){url=(url||'').trim();try{const u=new URL(url.startsWith('http')?url:'https://'+url);if(u.hostname.includes('youtu.be'))return u.pathname.slice(1).split(/[?&]/)[0];const v=u.searchParams.get('v');if(v)return v;}catch{}const m=url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);return m?m[1]:null;}
 async function fetchInfo(id){try{const r=await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);if(r.ok){const d=await r.json();return{id,title:d.title||'Track',channel:d.author_name||'Unknown',thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`};}}catch{}return{id,title:'YouTube Track',channel:'Unknown',thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`};}
 async function handleAdd(){const raw=document.getElementById('urlIn').value.trim();if(!raw){showToast('Paste a YouTube link first.','err');return;}const id=getVid(raw);if(!id){showToast('Not a valid YouTube link.','err');return;}if(queue.find(t=>t.id===id)){showToast('Already in queue!','inf');return;}showToast('Loading…','inf');const btn=document.getElementById('addBtn');btn.textContent='⏳';btn.disabled=true;const info=await fetchInfo(id);queue.push(info);addToLib(info);document.getElementById('urlIn').value='';clearToast();btn.textContent='➕';btn.disabled=false;saveQ();renderQ();if(curIdx===-1)playTrack(queue.length-1);}
-document.getElementById('urlIn').addEventListener('keydown',e=>{if(e.key==='Enter')handleAdd();});
+try{document.getElementById('urlIn').addEventListener('keydown',e=>{if(e.key==='Enter')handleAdd();});}catch{}
 
 /* ══ QUEUE ══ */
 function renderQ(){const el=document.getElementById('qlist');document.getElementById('qCount').textContent=queue.length?`(${queue.length})`:'';if(!queue.length){el.innerHTML=`<div class="empty"><div class="eic">🎧</div><div class="etx">Paste a YouTube link above<br>to start your queue</div></div>`;return;}el.innerHTML=queue.map((t,i)=>`<div class="qi ${i===curIdx?'on':''}" onclick="playTrack(${i})"><div class="qnum ${i===curIdx?'on':''}">${i===curIdx?'♫':i+1}</div><img class="qthumb" src="${esc(t.thumb)}" alt="" loading="lazy"><div class="qinfo"><div class="qtitle">${esc(t.title)}</div><div class="qch">${esc(t.channel)}</div></div><div class="q-acts"><button class="q-act" onclick="openAddToPlFor(event,${i})" title="Add to playlist">🎵</button><button class="q-act rm" onclick="rmQ(event,${i})" title="Remove">✕</button></div></div>`).join('');}
@@ -1314,6 +1315,14 @@ document.addEventListener('mouseup',onUp);
 }
 
 /* ══ WHAT'S NEW ══ */
+/* ══ ONBOARDING ══ */
+let obStep=0;const OBT=6;
+function startOnboarding(name){document.getElementById('obHi').textContent='Hey '+name+'!';obStep=0;buildObDots();showObStep(0);document.getElementById('onboarding').classList.add('active');}
+function buildObDots(){document.getElementById('obDots').innerHTML=Array.from({length:OBT},(_,i)=>`<div class="ob-dot ${i===0?'on':''}" id="obdot${i}"></div>`).join('');}
+function showObStep(n){document.querySelectorAll('.ob-step').forEach(s=>s.classList.remove('show'));const s=document.querySelector(`.ob-step[data-step="${n}"]`);if(s)s.classList.add('show');for(let i=0;i<OBT;i++){const d=document.getElementById('obdot'+i);if(d)d.classList.toggle('on',i===n);}document.getElementById('obBtn').textContent=n>=OBT-1?'Get Started 🎵':'Next →';}
+function obNext(){obStep++;if(obStep>=OBT){obFinish();return;}showObStep(obStep);}
+function obFinish(){document.getElementById('onboarding').classList.remove('active');if(user)S.s('aura_ob_'+user.id,true);}
+
 const WHATS_NEW_KEY='aura_wn_v4';
 const WELCOME_KEY='aura_welcome_v1';
 function maybeShowWhatsNew(){if(!S.g(WHATS_NEW_KEY)){S.s(WHATS_NEW_KEY,true);setTimeout(()=>openOv('whatsNewOv'),700);}}
@@ -1321,8 +1330,10 @@ function maybeShowWelcome(){if(!S.g(WELCOME_KEY)){S.s(WELCOME_KEY,true);setTimeo
 function closeWelcome(){closeOv('welcomeOv');maybeShowWhatsNew();}
 
 /* ══ VISUALIZER ══ */
+try{
 const visEl=document.getElementById('vis');const vbars=[];
 for(let i=0;i<26;i++){const b=document.createElement('div');b.className='vb';b.mn=Math.random()*3+2;b.mx=Math.random()*16+8;b.v=b.mn;b.d=1;b.style.height=b.mn+'px';visEl.appendChild(b);vbars.push(b);}
+}catch{}
 let visT=null;
 function startVis(){if(!document.getElementById('togVis').checked||visT)return;visT=setInterval(()=>vbars.forEach(b=>{b.v+=b.d*(Math.random()*1.6+.3);if(b.v>=b.mx){b.d=-1;b.v=b.mx;}if(b.v<=b.mn){b.d=1;b.v=b.mn;}b.style.height=b.v+'px';}),80);}
 function stopVis(){clearInterval(visT);visT=null;vbars.forEach(b=>b.style.height=b.mn+'px');}
@@ -1346,7 +1357,7 @@ function savePrefs(){prefs.autoplay=document.getElementById('togAuto').checked;p
 /* ══ MODALS ══ */
 function openOv(id){document.getElementById(id).classList.add('on');}
 function closeOv(id){document.getElementById(id).classList.remove('on');}
-document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));
+try{document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));}catch{}
 
 /* ══ TOAST ══ */
 let toastT=null;
@@ -1385,7 +1396,7 @@ renderQ();
 </html>
 
 
-On Wed, Mar 18, 2026 at 12:00 AM Miguel Hernandez <fernandezmiguelito70@gmail.com> wrote:
+On Wed, Mar 18, 2026 at 12:06 AM Miguel Hernandez <fernandezmiguelito70@gmail.com> wrote:
 <!DOCTYPE html>
 
 <html lang="en">
@@ -2207,4 +2218,4 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 </div>
 <div style="background:var(--c1);border:1px solid var(--br);border-radius:14px;padding:14px;display:flex;align-items:flex-start;gap:12px">
 <div style="font-size:22px;flex-shrink:0;margin-top:1px">🖼️</div>
-<div><div style="font-size:13px;font-weight:700;margin-bottom:3px
+<div><div style="font-size:13px;font-weight:700;margin-bottom
