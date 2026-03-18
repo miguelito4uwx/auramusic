@@ -332,9 +332,9 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 <div style="background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(56,189,248,.06));border:1px solid rgba(124,58,237,.2);border-radius:16px;padding:18px;margin-bottom:20px;text-align:left">
 <div style="font-family:var(--fd);font-size:13px;font-weight:700;margin-bottom:10px;text-align:center">For the best experience</div>
 <div style="display:flex;flex-direction:column;gap:10px">
-<div style="display:flex;align-items:flex-start;gap:10px"><div style="font-size:16px;flex-shrink:0">🎵</div><div style="font-size:12px;color:var(--tx2);line-height:1.5">Music keeps playing when you <strong style="color:var(--tx)">lock your screen</strong></div></div>
 <div style="display:flex;align-items:flex-start;gap:10px"><div style="font-size:16px;flex-shrink:0">⚡</div><div style="font-size:12px;color:var(--tx2);line-height:1.5">Loads faster, feels like a <strong style="color:var(--tx)">native app</strong></div></div>
 <div style="display:flex;align-items:flex-start;gap:10px"><div style="font-size:16px;flex-shrink:0">📱</div><div style="font-size:12px;color:var(--tx2);line-height:1.5">Sits on your <strong style="color:var(--tx)">home screen</strong> ready to go</div></div>
+<div style="display:flex;align-items:flex-start;gap:10px"><div style="font-size:16px;flex-shrink:0">🎨</div><div style="font-size:12px;color:var(--tx2);line-height:1.5">Feels like a real app with your own <strong style="color:var(--tx)">custom themes</strong></div></div>
 </div>
 </div>
 <div style="font-size:11px;color:var(--tx2);margin-bottom:14px;line-height:1.6">Tap <strong style="color:var(--tx)">Share → Add to Home Screen</strong> on iPhone,<br>or <strong style="color:var(--tx)">⋮ → Install App</strong> on Android</div>
@@ -437,8 +437,8 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 <div id="installBanner">
 <div class="ib-icon">📲</div>
 <div class="ib-body">
-<div class="ib-title">Install for Background Audio</div>
-<div class="ib-sub">Add Aura to your home screen so music keeps playing when you lock your phone.</div>
+<div class="ib-title">Install Aura as an App</div>
+<div class="ib-sub">Add to your home screen for a faster, app-like experience.</div>
 <div class="ib-actions">
 <button class="ib-btn ib-install" onclick="triggerInstall()">Install App</button>
 <button class="ib-btn ib-dismiss" onclick="dismissInstallBanner()">Not now</button>
@@ -450,8 +450,8 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 <div id="bgAudioBanner">
 <div style="font-size:18px;flex-shrink:0">⚠️</div>
 <div class="ba-body">
-<div class="ba-title">Audio pauses when screen locks</div>
-<div class="ba-sub">Install Aura as an app from your browser menu to keep audio playing when your screen locks.</div>
+<div class="ba-title">Install Aura as an App</div>
+<div class="ba-sub">Add to your home screen from your browser menu for the best experience.</div>
 </div>
 <button class="ba-close" onclick="dismissBgBanner()">✕</button>
 </div>
@@ -590,7 +590,7 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 <label class="tog"><input type="checkbox" id="togWakeLock" onchange="toggleWakeLock()"><div class="togtr"></div></label>
 </div>
 <div id="installSetRow" class="setrow" style="cursor:pointer;display:none" onclick="triggerInstall()">
-<div class="setrow-i"><div class="setrow-l">📲 Install as App</div><div class="setrow-d">Add to home screen for best background audio</div></div>
+<div class="setrow-i"><div class="setrow-l">📲 Install as App</div><div class="setrow-d">Add to home screen for the best experience</div></div>
 <span style="color:var(--a);font-size:11px;font-weight:600">Install</span>
 </div>
 </div>
@@ -715,6 +715,28 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 </div>
 </div>
 
+<!-- EDIT TRACK MODAL -->
+
+<div class="ov" id="editTrackOv">
+<div class="modal" style="padding-bottom:28px">
+<div class="mhandle"></div>
+<button class="mclose" onclick="closeOv('editTrackOv')">✕</button>
+<div class="mtitle">Edit Track Info</div>
+<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:16px">
+<div id="editTrackThumbWrap" style="width:72px;height:72px;border-radius:11px;overflow:hidden;flex-shrink:0;background:var(--c2);border:1px solid var(--br);cursor:pointer;position:relative" onclick="document.getElementById('editTrackThumbPick').click()">
+<img id="editTrackThumb" src="" style="width:100%;height:100%;object-fit:cover">
+<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:16px">🖼</div>
+</div>
+<input type="file" id="editTrackThumbPick" accept="image/*" style="display:none" onchange="handleTrackThumb(this)">
+<div style="flex:1;display:flex;flex-direction:column;gap:8px">
+<div class="fg" style="margin:0"><div class="flbl">Song Name</div><input class="fin" id="editTrackTitle" placeholder="Song title"></div>
+<div class="fg" style="margin:0"><div class="flbl">Artist</div><input class="fin" id="editTrackChannel" placeholder="Artist name"></div>
+</div>
+</div>
+<button class="btn-pr" onclick="saveTrackEdit()">Save Changes</button>
+</div>
+</div>
+
 <!-- FORGOT PASSWORD MODAL -->
 
 <div class="ov" id="forgotOv">
@@ -724,10 +746,7 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 <div style="text-align:center;padding:8px 0 22px">
 <div style="font-size:26px;margin-bottom:12px">🔑</div>
 <div style="font-family:var(--fd);font-size:18px;font-weight:800;margin-bottom:10px">Forgot your password?</div>
-<div style="font-size:13px;color:var(--tx2);line-height:1.6;padding:0 4px">Accounts are stored locally on your device, so there's no automatic reset email. <br><br>To get back in, reach out and we'll help you sort it out:</div>
-<a href="mailto:miguelito4u@gmail.com" style="display:inline-flex;align-items:center;gap:7px;margin-top:18px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.25);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:600;color:var(--a);text-decoration:none;transition:background .2s" onclick="closeOv('forgotOv')">
-✉️ miguelito4u@gmail.com
-</a>
+<div style="font-size:13px;color:var(--tx2);line-height:1.6;padding:0 4px">Accounts are stored locally on your device so there's no automatic reset. Unfortunately your account data cannot be recovered.<br><br>You can <strong style="color:var(--tx)">create a new account</strong> with the same email to start fresh.</div>
 </div>
 <button class="btn-gh" onclick="closeOv('forgotOv')">Back to Sign In</button>
 </div>
@@ -863,8 +882,7 @@ const isPWA=()=>window.matchMedia('(display-mode:standalone)').matches||navigato
 window.addEventListener('beforeinstallprompt',e=>{
 e.preventDefault();deferredPrompt=e;
 if(!isPWA()&&!S.g('aura_ib_dismiss')){
-document.getElementById('installBanner').classList.add('show');
-document.getElementById('installBtn').style.display='flex';
+document.getElementById('installBanner').classList.add('show'); document.getElementById('installBtn').style.display='flex';
 document.getElementById('installSetRow').style.display='flex';
 }
 });
@@ -873,7 +891,7 @@ deferredPrompt=null;
 document.getElementById('installBanner').classList.remove('show');
 document.getElementById('installBtn').style.display='none';
 document.getElementById('bgAudioBanner').classList.remove('show');
-showToast('Aura installed! Background audio enabled ✓','ok');
+showToast('Aura installed! ✓','ok');
 });
 function triggerInstall(){
 if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.then(r=>{if(r.outcome==='accepted')document.getElementById('installBanner').classList.remove('show');deferredPrompt=null;});}
@@ -1084,11 +1102,15 @@ const playAllBtn=document.getElementById('libPlayAll');
 if(playAllBtn)playAllBtn.style.display=lib.length?'':'none';
 if(!lib.length){el.innerHTML=`<div class="empty"><div class="eic">🎵</div><div class="etx">Your library is empty.<br>Every song you add or play gets saved here automatically.</div></div>`;return;}
 if(!filtered.length){el.innerHTML=`<div class="empty"><div class="eic">🔍</div><div class="etx">No songs match "${esc(q)}"</div></div>`;return;}
-el.innerHTML=filtered.map((t,i)=>`<div class="qi" onclick="playFromLib('${esc(t.id)}')"><div class="qnum">${i+1}</div><img class="qthumb" src="${esc(t.thumb)}" alt="" loading="lazy"><div class="qinfo"><div class="qtitle">${esc(t.title)}</div><div class="qch">${esc(t.channel)}</div></div><div class="q-acts"><button class="q-act" onclick="addToPlFromLib(event,'${esc(t.id)}')" title="Add to playlist">🎵</button><button class="q-act rm" onclick="removeFromLib(event,'${esc(t.id)}')" title="Remove from library">✕</button></div></div>`).join('');
+el.innerHTML=filtered.map((t,i)=>`<div class="qi" onclick="playFromLib('${esc(t.id)}')"><div class="qnum">${i+1}</div><img class="qthumb" src="${esc(t.thumb)}" alt="" loading="lazy"><div class="qinfo"><div class="qtitle">${esc(t.title)}</div><div class="qch">${esc(t.channel)}</div></div><div class="q-acts"><button class="q-act" onclick="openEditTrack(event,'${esc(t.id)}')" title="Edit">✏️</button><button class="q-act" onclick="addToPlFromLib(event,'${esc(t.id)}')" title="Add to playlist">🎵</button><button class="q-act rm" onclick="removeFromLib(event,'${esc(t.id)}')" title="Remove">✕</button></div></div>`).join('');
 }
 function playFromLib(id){const t=lib.find(x=>x.id===id);if(!t)return;if(!queue.find(x=>x.id===id)){queue.push({...t});saveQ();renderQ();}const idx=queue.findIndex(x=>x.id===id);playTrack(idx);goTab('home');}
 function playLibAll(){const q=((document.getElementById('libSearch')||{}).value||'').trim().toLowerCase();const tracks=q?lib.filter(t=>t.title.toLowerCase().includes(q)||t.channel.toLowerCase().includes(q)):lib;if(!tracks.length)return;queue=[...tracks];saveQ();renderQ();playTrack(0);goTab('home');}
 function removeFromLib(e,id){e.stopPropagation();lib=lib.filter(t=>t.id!==id);saveLib();renderLib();}
+let editingTrackId=null;
+function openEditTrack(e,id){e.stopPropagation();const t=lib.find(x=>x.id===id);if(!t)return;editingTrackId=id;document.getElementById('editTrackTitle').value=t.title;document.getElementById('editTrackChannel').value=t.channel;document.getElementById('editTrackThumb').src=t.thumb;document.getElementById('editTrackOv').dataset.pendingThumb='';openOv('editTrackOv');}
+function handleTrackThumb(input){const file=input.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{document.getElementById('editTrackThumb').src=e.target.result;document.getElementById('editTrackOv').dataset.pendingThumb=e.target.result;};r.readAsDataURL(file);input.value='';}
+function saveTrackEdit(){const t=lib.find(x=>x.id===editingTrackId);if(!t)return;t.title=document.getElementById('editTrackTitle').value.trim()||t.title;t.channel=document.getElementById('editTrackChannel').value.trim()||t.channel;const pt=document.getElementById('editTrackOv').dataset.pendingThumb;if(pt)t.thumb=pt;saveLib();renderLib();closeOv('editTrackOv');showToast('Track updated ✓','ok');editingTrackId=null;}
 function addToPlFromLib(e,id){e.stopPropagation();const t=lib.find(x=>x.id===id);if(!t)return;if(!queue.find(x=>x.id===id)){queue.push({...t});saveQ();renderQ();}pendingAddIdx=queue.findIndex(x=>x.id===id);openOv('addToPlOv');const el=document.getElementById('addToPlBody');if(!pls.length){el.innerHTML=`<div style="color:var(--tx2);font-size:13px;text-align:center;padding:16px 0">No playlists yet. Create one below!</div>`;}else{el.innerHTML=pls.map(pl=>`<div class="srow" onclick="addTrackToPl('${pl.id}')"><div class="sav" style="border-radius:9px;font-size:11px;width:32px;height:32px">🎵</div><div class="sav-info"><div class="sav-n">${esc(pl.name)}</div><div class="sav-e">${pl.tracks.length} tracks${pl.tracks.find(x=>x.id===t.id)?' · already added':''}</div></div><span style="color:${pl.tracks.find(x=>x.id===t.id)?'var(--green)':'var(--tx2)'};font-size:16px">${pl.tracks.find(x=>x.id===t.id)?'✓':'＋'}</span></div>`).join('');}}
 
 /* ══ YOUTUBE SEARCH ══ */
