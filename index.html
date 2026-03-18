@@ -968,25 +968,31 @@ const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
 
 /* ══ BOOT ══ */
-setTimeout(()=>{document.getElementById('loader').classList.add('out');boot();},3200);
+setTimeout(()=>{
+console.log('BOOT: loader hiding');
+document.getElementById('loader').classList.add('out');
+try{boot();}catch(e){console.error('BOOT ERROR:',e);document.getElementById('loader').innerHTML=`<div style="color:#f87171;padding:20px;text-align:center;font-size:13px">Boot error: ${e.message}<br><br><button onclick="location.reload()" style="padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer">Retry</button></div>`;document.getElementById('loader').classList.remove('out');}
+},3200);
 function boot(){
+console.log('BOOT: started');
 prefs=S.g('aura_prefs')||{};
 applyPrefs();buildSwatches();buildBgOps();buildFontOps();
+console.log('BOOT: prefs applied');
 if(!('wakeLock' in navigator))document.getElementById('wakeLockRow').style.display='none';
 const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';document.head.appendChild(sc);
-if(!isPWA()&&!S.g('aura_ip_seen')){document.getElementById('installPromptPage').classList.add('active');document.getElementById('ipLogo').textContent='aura';return;}
-// Firebase auth state handles login
-onAuthStateChanged(auth, async fbUser => {
-if(fbUser){
-await loadUserData(fbUser);
-} else {
-showAuth();
+if(!isPWA()&&!S.g('aura_ip_seen')){console.log('BOOT: showing install prompt');document.getElementById('installPromptPage').classList.add('active');document.getElementById('ipLogo').textContent='aura';return;}
+console.log('BOOT: calling initAuth');
+initAuth();
 }
+function initAuth(){
+console.log('BOOT: initAuth called, showing auth');
+showAuth();
+console.log('BOOT: calling onAuthStateChanged');
+onAuthStateChanged(auth, async fbUser=>{
+console.log('BOOT: auth state changed, user:', fbUser?.email||'none');
+if(fbUser){await loadUserData(fbUser);}
 });
 }
-function dismissInstallPrompt(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');initAuth();}
-function proceedWithoutInstall(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');initAuth();}
-function initAuth(){onAuthStateChanged(auth, async fbUser=>{if(fbUser){await loadUserData(fbUser);}else{showAuth();}});}
 
 async function loadUserData(fbUser){
 try{
@@ -1394,9 +1400,7 @@ renderQ();
 
 </body>
 </html>
-
-
-On Wed, Mar 18, 2026 at 12:06 AM Miguel Hernandez <fernandezmiguelito70@gmail.com> wrote:
+On Wed, Mar 18, 2026 at 12:14 AM Miguel Hernandez <fernandezmiguelito70@gmail.com> wrote:
 <!DOCTYPE html>
 
 <html lang="en">
