@@ -348,7 +348,7 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 .import-item-ch{font-size:10px;color:var(–tx2)}
 .import-item-status{font-size:16px;flex-shrink:0}
 
-#ytbox{position:fixed;width:1px;height:1px;bottom:-2px;left:-2px;opacity:.01;pointer-events:none;z-index:-1;overflow:hidden}
+
 .hidden{display:none!important}
 </style>
 
@@ -739,7 +739,7 @@ input[type=range].vslide::-moz-range-thumb{width:13px;height:13px;border-radius:
 </div>
 </div>
 
-<div id="ytbox"><div id="ytplayer"></div></div>
+<!-- ytbox removed: no longer using YouTube iframe API -->
 
 <!-- ══ MODALS ══ -->
 
@@ -970,7 +970,7 @@ const S={g:k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}
 /* ══ STATE ══ */
 let user=null,accounts=[],queue=[],pls=[],favs={},prefs={},lib=[];
 let curIdx=-1,playing=false,shuf=false,rep=false,curPlId=null;
-let ytPlayer=null,ytReady=false,progTimer=null,pendingAddIdx=null;
+let progTimer=null,pendingAddIdx=null;
 let deferredPrompt=null,wakeLock=null;
 const isPWA=()=>window.matchMedia('(display-mode:standalone)').matches||navigator.standalone===true;
 
@@ -1008,19 +1008,18 @@ document.addEventListener('visibilitychange',async()=>{if(document.visibilitySta
 function setMediaSession(t){
 if(!('mediaSession' in navigator))return;
 navigator.mediaSession.metadata=new MediaMetadata({title:t.title||'Track',artist:t.channel||'Aura',album:'Aura',artwork:[{src:t.thumb,sizes:'1280x720',type:'image/jpeg'},{src:`https://img.youtube.com/vi/${t.id}/hqdefault.jpg`,sizes:'480x360',type:'image/jpeg'},{src:`https://img.youtube.com/vi/${t.id}/mqdefault.jpg`,sizes:'320x180',type:'image/jpeg'}]});
-navigator.mediaSession.setActionHandler('play',()=>{if(usingNative&&nativeAudio)nativeAudio.play().catch(()=>{});else if(ytReady)ytPlayer.playVideo();});
-navigator.mediaSession.setActionHandler('pause',()=>{if(usingNative&&nativeAudio)nativeAudio.pause();else if(ytReady)ytPlayer.pauseVideo();});
+navigator.mediaSession.setActionHandler('play',()=>{if(nativeAudio)nativeAudio.play().catch(()=>{});});
+navigator.mediaSession.setActionHandler('pause',()=>{if(nativeAudio)nativeAudio.pause();});
 navigator.mediaSession.setActionHandler('previoustrack',prevTrack);
 navigator.mediaSession.setActionHandler('nexttrack',nextTrack);
-try{navigator.mediaSession.setActionHandler('seekto',d=>{if(usingNative&&nativeAudio&&isFinite(nativeAudio.duration))nativeAudio.currentTime=d.seekTime;else if(!usingNative&&ytReady&&d.seekTime!=null)ytPlayer.seekTo(d.seekTime,true);});}catch{}
+try{navigator.mediaSession.setActionHandler('seekto',d=>{if(nativeAudio&&isFinite(nativeAudio.duration))nativeAudio.currentTime=d.seekTime;});}catch{}
 }
 function setMSState(s){if('mediaSession' in navigator)navigator.mediaSession.playbackState=s;}
 function setMSPos(){
 if(!('mediaSession' in navigator)||!navigator.mediaSession.setPositionState)return;
 try{
-  let p=0,d=1;
-  if(usingNative&&nativeAudio&&isFinite(nativeAudio.duration)){p=nativeAudio.currentTime||0;d=nativeAudio.duration;}
-  else if(!usingNative&&ytReady&&ytPlayer){p=ytPlayer.getCurrentTime()||0;d=ytPlayer.getDuration()||1;}
+  if(!nativeAudio||!isFinite(nativeAudio.duration))return;
+  const p=nativeAudio.currentTime||0,d=nativeAudio.duration;
   if(d>0)navigator.mediaSession.setPositionState({duration:d,playbackRate:1,position:Math.min(p,d)});
 }catch{}
 }
@@ -1031,35 +1030,20 @@ function boot(){
 accounts=S.g('aura_acc')||[];prefs=S.g('aura_prefs')||{};
 applyPrefs();buildSwatches();buildBgOps();buildFontOps();
 if(!('wakeLock' in navigator))document.getElementById('wakeLockRow').style.display='none';
-const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';document.head.appendChild(sc);
+// No YouTube iframe API needed
 const last=S.g('aura_last');if(last){const a=accounts.find(x=>x.id===last);if(a){loginAs(a,true);return;}}
 if(!isPWA()&&!S.g('aura_ip_seen')){document.getElementById('installPromptPage').classList.add('active');document.getElementById('ipLogo').textContent='aura';return;}
 showAuth();
 }
 function dismissInstallPrompt(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');showAuth();}
 function proceedWithoutInstall(){S.s('aura_ip_seen',1);document.getElementById('installPromptPage').classList.remove('active');showAuth();}
-window.onYouTubeIframeAPIReady=function(){
-ytPlayer=new YT.Player('ytplayer',{height:'1',width:'1',
-playerVars:{autoplay:0,controls:0,rel:0,playsinline:1,enablejsapi:1,origin:location.origin||''},
-events:{
-onReady:()=>{ytReady=true;setVol(prefs.vol||80);},
-onStateChange:e=>{
-if(usingNative)return; // native audio engine is in control, ignore iframe events
-if(e.data===YT.PlayerState.PLAYING){playing=true;updBtns();startVis();startProg();setMSState('playing');if(prefs.wakeLock)acquireWakeLock();}
-else if(e.data===YT.PlayerState.PAUSED){playing=false;updBtns();stopVis();clearInterval(progTimer);setMSState('paused');if(!prefs.wakeLock)releaseWakeLock();}
-else if(e.data===YT.PlayerState.ENDED){playing=false;stopVis();clearInterval(progTimer);setMSState('none');releaseWakeLock();onEnded();}
-},
-onError:e=>{const m={2:'Bad video ID',5:'HTML5 error',100:'Video not found',101:'Embed disabled',150:'Embed disabled'};showToast('Cannot play: '+(m[e.data]||'Error '+e.data),'err');playing=false;updBtns();stopVis();}
-}
-});
-};
-function onEnded(){if(rep){ytPlayer.seekTo(0);ytPlayer.playVideo();return;}if(prefs.autoplay!==false)nextTrack();}
+// No YouTube iframe API needed — all playback goes through Piped + native <audio>
+function onEnded(){if(rep&&nativeAudio){nativeAudio.currentTime=0;nativeAudio.play().catch(()=>{});return;}if(prefs.autoplay!==false)nextTrack();}
 
-// Resume AudioContext and native audio when returning from lock screen
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden){
     if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});
-    if(usingNative&&nativeAudio&&nativeAudio.paused&&playing)nativeAudio.play().catch(()=>{});
+    if(nativeAudio&&nativeAudio.paused&&playing)nativeAudio.play().catch(()=>{});
   }
 });
 
@@ -1129,22 +1113,17 @@ if(t==='search')document.getElementById('srchIn').focus();
 if(t==='addsong')setTimeout(()=>document.getElementById('urlIn').focus(),200);
 }
 
-/* ══ PLAYBACK ENGINE ══
-   iOS Safari suspends YouTube iframes on lock screen — always.
-   Fix: fetch the real audio stream URL from Piped (open-source YT frontend),
-   play it through a native <audio> element which iOS keeps alive.
-   Falls back to YT iframe if Piped fails (desktop / non-iOS).
-*/
+/* ══ PLAYBACK ENGINE — Piped API + native <audio>, no YouTube iframe ══ */
 
-// Piped instances to try in order
 const PIPED_INSTANCES=[
   'https://pipedapi.kavin.rocks',
   'https://piped-api.garudalinux.org',
   'https://api.piped.projectsegfau.lt',
+  'https://pipedapi.adminforge.de',
 ];
 
-let nativeAudio=null; // the native <audio> element for iOS
-let usingNative=false; // true when playing via native audio
+let nativeAudio=null;
+let usingNative=false;
 let audioCtx=null;
 
 function _getNativeAudio(){
@@ -1156,7 +1135,7 @@ function _getNativeAudio(){
   nativeAudio.addEventListener('ended',()=>{if(usingNative)onEnded();});
   nativeAudio.addEventListener('pause',()=>{if(usingNative&&playing){playing=false;updBtns();stopVis();clearInterval(progTimer);setMSState('paused');}});
   nativeAudio.addEventListener('play',()=>{if(usingNative){playing=true;updBtns();startVis();startProgNative();setMSState('playing');if(prefs.wakeLock)acquireWakeLock();}});
-  nativeAudio.addEventListener('error',()=>{if(usingNative){showToast('Stream error — retrying…','inf');usingNative=false;_playViaIframe(queue[curIdx]?.id);}});
+  nativeAudio.addEventListener('error',()=>{showToast('Stream error — trying next source…','inf');_tryNextInstance(queue[curIdx],0);});
   document.body.appendChild(nativeAudio);
   return nativeAudio;
 }
@@ -1174,56 +1153,42 @@ function _ensureAudioContext(){
   return audioCtx;
 }
 
-async function _fetchPipedStream(videoId){
-  for(const base of PIPED_INSTANCES){
-    try{
-      const r=await fetch(`${base}/streams/${videoId}`,{signal:AbortSignal.timeout(5000)});
-      if(!r.ok)continue;
-      const d=await r.json();
-      // Prefer audio-only streams, highest quality
-      const streams=(d.audioStreams||[]).filter(s=>s.url);
-      if(!streams.length)continue;
-      streams.sort((a,b)=>(b.bitrate||0)-(a.bitrate||0));
-      return streams[0].url;
-    }catch{}
+async function _fetchStreamFromInstance(videoId,base){
+  const r=await fetch(`${base}/streams/${videoId}`,{signal:AbortSignal.timeout(6000)});
+  if(!r.ok)throw new Error('bad response');
+  const d=await r.json();
+  if(d.error)throw new Error(d.error);
+  const streams=(d.audioStreams||[]).filter(s=>s.url);
+  if(!streams.length)throw new Error('no streams');
+  streams.sort((a,b)=>(b.bitrate||0)-(a.bitrate||0));
+  return streams[0].url;
+}
+
+async function _tryNextInstance(track,idx){
+  if(!track||idx>=PIPED_INSTANCES.length){
+    showToast('Could not load this track. It may be unavailable.','err');
+    playing=false;updBtns();stopVis();return;
   }
-  return null;
+  try{
+    const url=await _fetchStreamFromInstance(track.id,PIPED_INSTANCES[idx]);
+    const el=_getNativeAudio();
+    usingNative=true;
+    el.src=url;el.currentTime=0;
+    el.volume=Math.max(0.02,(prefs.vol!=null?prefs.vol:80)/100);
+    await el.play();
+  }catch(e){await _tryNextInstance(track,idx+1);}
 }
 
 async function _playViaNative(track){
   const el=_getNativeAudio();
-  // Resume AudioContext inside this user-gesture call stack
   const ctx=_ensureAudioContext();
   if(ctx&&ctx.state==='suspended')ctx.resume().catch(()=>{});
-
+  el.pause();el.src='';usingNative=false;
   showToast('Loading…','inf');
-  const url=await _fetchPipedStream(track.id);
-  if(!url){
-    clearToast();
-    // Piped failed — fall back to iframe
-    usingNative=false;
-    _playViaIframe(track.id);
-    return;
-  }
-  usingNative=true;
-  el.src=url;
-  el.currentTime=0;
-  const vol=(prefs.vol!=null?prefs.vol:80)/100;
-  el.volume=Math.max(0.01,vol); // must not be 0 or iOS won't keep session alive
+  await _tryNextInstance(track,0);
   clearToast();
-  el.play().then(()=>{
-    playing=true;updBtns();startVis();startProgNative();setMSState('playing');
-    if(prefs.wakeLock)acquireWakeLock();
-  }).catch(e=>{
-    usingNative=false;
-    _playViaIframe(track.id);
-  });
 }
 
-function _playViaIframe(videoId){
-  if(!ytReady){setTimeout(()=>_playViaIframe(videoId),500);return;}
-  ytPlayer.loadVideoById(videoId);
-}
 
 function startProgNative(){
   clearInterval(progTimer);
@@ -1241,14 +1206,10 @@ function startProgNative(){
   },500);
 }
 
-// Seek on progress bar click — works for both engines
 document.getElementById('progW').addEventListener('click',e=>{
-  if(usingNative&&nativeAudio){
-    const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width;
-    if(isFinite(nativeAudio.duration))nativeAudio.currentTime=pct*nativeAudio.duration;
-  } else if(!usingNative&&ytReady&&ytPlayer){
-    try{const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width,d=ytPlayer.getDuration();if(d)ytPlayer.seekTo(pct*d,true);}catch{}
-  }
+  if(!nativeAudio||!isFinite(nativeAudio.duration))return;
+  const r=e.currentTarget.getBoundingClientRect();
+  nativeAudio.currentTime=((e.clientX-r.left)/r.width)*nativeAudio.duration;
 });
 
 /* ══ PLAYBACK ══ */
@@ -1257,7 +1218,7 @@ function playTrack(idx){
   curIdx=idx;const t=queue[idx];
   // Stop whatever is currently playing
   if(usingNative&&nativeAudio){nativeAudio.pause();nativeAudio.src='';}
-  else if(ytReady&&ytPlayer){try{ytPlayer.stopVideo();}catch{}}
+
   usingNative=false;playing=false;stopVis();clearInterval(progTimer);
   addToLib(t);updatePlayerUI(t);setMediaSession(t);
   document.getElementById('mini').classList.add('on');
@@ -1274,15 +1235,15 @@ function updatePlayerUI(t){
 function togglePlay(){
   if(curIdx<0)return;
   _ensureAudioContext();
+  if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});
   if(usingNative&&nativeAudio){
     playing?nativeAudio.pause():nativeAudio.play().catch(()=>{});
-  } else if(ytReady){
-    playing?ytPlayer.pauseVideo():ytPlayer.playVideo();
+  } else if(!usingNative&&queue[curIdx]){
+    _playViaNative(queue[curIdx]);
   }
 }
 function stopTrack(){
-  if(usingNative&&nativeAudio){nativeAudio.pause();nativeAudio.src='';}
-  if(ytReady&&ytPlayer&&ytPlayer.stopVideo){try{ytPlayer.stopVideo();}catch{}}
+  if(nativeAudio){nativeAudio.pause();nativeAudio.src='';}
   playing=false;usingNative=false;updBtns();stopVis();clearInterval(progTimer);setMSState('none');
 }
 function prevTrack(){if(queue.length)playTrack(curIdx>0?curIdx-1:queue.length-1);}
@@ -1293,8 +1254,7 @@ function toggleFav(){if(curIdx<0)return;const id=queue[curIdx].id;favs[id]=!favs
 function updBtns(){const ic=playing?'⏸':'▶';document.getElementById('playBtn').textContent=ic;document.getElementById('miniPlay').textContent=ic;}
 function setVol(v){
   v=parseInt(v);
-  if(usingNative&&nativeAudio)nativeAudio.volume=Math.max(0.01,v/100);
-  if(ytReady&&ytPlayer&&ytPlayer.setVolume)ytPlayer.setVolume(v);
+  if(nativeAudio)nativeAudio.volume=Math.max(0.02,v/100);
   document.getElementById('volic').textContent=v===0?'🔇':v<40?'🔉':'🔊';
   document.getElementById('vslide').value=v;
   document.getElementById('vslide').style.background=`linear-gradient(90deg,var(--p) ${v}%,rgba(255,255,255,.1) ${v}%)`;
@@ -1302,7 +1262,7 @@ function setVol(v){
 }
 document.getElementById('vslide').addEventListener('input',e=>setVol(e.target.value));
 document.getElementById('vslide').style.background='linear-gradient(90deg,var(--p) 80%,rgba(255,255,255,.1) 80%)';
-function startProg(){clearInterval(progTimer);progTimer=setInterval(()=>{if(!ytReady||!ytPlayer||!ytPlayer.getCurrentTime)return;try{const c=ytPlayer.getCurrentTime()||0,d=ytPlayer.getDuration()||1,pct=(c/d)*100;document.getElementById('progB').style.width=pct+'%';document.getElementById('progTip').style.left=pct+'%';document.getElementById('minipb').style.width=pct+'%';document.getElementById('tNow').textContent=fmt(c);document.getElementById('tDur').textContent=fmt(d);setMSPos();}catch{}},500);}
+function startProg(){startProgNative();}
 function resetProg(){['progB','minipb'].forEach(id=>{document.getElementById(id).style.width='0%'});document.getElementById('progTip').style.left='0%';document.getElementById('tNow').textContent='0:00';document.getElementById('tDur').textContent='—';}
 
 const fmt=s=>{s=Math.floor(s||0);const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
@@ -1354,7 +1314,7 @@ function addTrackToPl(plId){const pl=pls.find(p=>p.id===plId);if(!pl)return;cons
 function savePls(){if(user)S.s('aura_pl_'+user.id,pls);}
 
 /* ══ IMPORT YOUTUBE PLAYLIST ══ */
-const YT_KEY='AIzaSyDpsyKbDOQGoGRBpuG7ctewNBJS1shG6Ps';
+// YouTube Data API removed — search and imports now use Piped API
 let importAbort=false;
 
 function getPlaylistId(url){
@@ -1395,32 +1355,27 @@ document.getElementById('importResultList').innerHTML='';
 document.getElementById('importProgBar').style.width='0%';
 document.getElementById('importProgLabel').textContent='Fetching playlist info…';
 
-// Step 1: get playlist title
-let plTitle=customName;
-if(!plTitle){
-try{
-const r=await fetch(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${listId}&key=${YT_KEY}`);
-const d=await r.json();
-if(d.items&&d.items[0])plTitle=d.items[0].snippet.title||'Imported Playlist';
-else plTitle='Imported Playlist';
-}catch{plTitle='Imported Playlist';}
+// Step 1 + 2: fetch playlist via Piped API (no API key needed)
+let plTitle=customName||'Imported Playlist';
+let videoIds=[];
+document.getElementById('importProgLabel').textContent='Fetching playlist via Piped…';
+let fetched=false;
+for(const base of PIPED_INSTANCES){
+  try{
+    const r=await fetch(`${base}/playlists/${listId}`,{signal:AbortSignal.timeout(10000)});
+    if(!r.ok)continue;
+    const d=await r.json();
+    if(!d.relatedStreams&&!d.videos){continue;}
+    if(!customName&&d.name)plTitle=d.name;
+    const items=d.relatedStreams||d.videos||[];
+    items.forEach(item=>{
+      const id=(item.url||'').replace('/watch?v=','').split('&')[0];
+      if(id)videoIds.push({id,title:item.title||'Track'});
+    });
+    fetched=true;break;
+  }catch{}
 }
-
-// Step 2: fetch all video IDs from playlist
-let videoIds=[];let pageToken='';
-document.getElementById('importProgLabel').textContent='Fetching videos…';
-try{
-do{
-const r=await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${listId}&key=${YT_KEY}${pageToken?'&pageToken='+pageToken:''}`);
-const d=await r.json();
-if(d.error){showToast('API error: '+(d.error.message||'unknown'),'err');btn.disabled=false;btn.textContent='Import Playlist';return;}
-(d.items||[]).forEach(item=>{
-const vid=item.contentDetails&&item.contentDetails.videoId;
-if(vid&&vid!=='deleted')videoIds.push({id:vid,title:item.snippet&&item.snippet.title||'Track'});
-});
-pageToken=d.nextPageToken||'';
-}while(pageToken&&!importAbort);
-}catch(e){showToast('Failed to fetch playlist. Check the URL and try again.','err');btn.disabled=false;btn.textContent='Import Playlist';return;}
+if(!fetched){showToast('Could not fetch playlist. Check the URL and try again.','err');btn.disabled=false;btn.textContent='Import Playlist';return;}
 
 if(!videoIds.length){showToast('No videos found in this playlist.','inf');btn.disabled=false;btn.textContent='Import Playlist';return;}
 
@@ -1497,7 +1452,7 @@ function handleTrackThumb(input){const file=input.files[0];if(!file)return;const
 function saveTrackEdit(){const t=lib.find(x=>x.id===editingTrackId);if(!t)return;t.title=document.getElementById('editTrackTitle').value.trim()||t.title;t.channel=document.getElementById('editTrackChannel').value.trim()||t.channel;const pt=document.getElementById('editTrackOv').dataset.pendingThumb;if(pt)t.thumb=pt;saveLib();renderLib();closeOv('editTrackOv');showToast('Track updated ✓','ok');editingTrackId=null;}
 function addToPlFromLib(e,id){e.stopPropagation();const t=lib.find(x=>x.id===id);if(!t)return;if(!queue.find(x=>x.id===id)){queue.push({...t});saveQ();renderQ();}pendingAddIdx=queue.findIndex(x=>x.id===id);openOv('addToPlOv');const el=document.getElementById('addToPlBody');if(!pls.length){el.innerHTML=`<div style="color:var(--tx2);font-size:13px;text-align:center;padding:16px 0">No playlists yet. Create one below!</div>`;}else{el.innerHTML=pls.map(pl=>`<div class="srow" onclick="addTrackToPl('${pl.id}')"><div class="sav" style="border-radius:9px;font-size:11px;width:32px;height:32px">🎵</div><div class="sav-info"><div class="sav-n">${esc(pl.name)}</div><div class="sav-e">${pl.tracks.length} tracks${pl.tracks.find(x=>x.id===t.id)?' · already added':''}</div></div><span style="color:${pl.tracks.find(x=>x.id===t.id)?'var(--green)':'var(--tx2)'};font-size:16px">${pl.tracks.find(x=>x.id===t.id)?'✓':'＋'}</span></div>`).join('');}}
 
-/* ══ YOUTUBE SEARCH ══ */
+/* ══ SEARCH via Piped API — no YouTube Data API key needed ══ */
 let srchLoading=false;
 async function doSearch(){
 const q=document.getElementById('srchIn').value.trim();
@@ -1507,18 +1462,31 @@ const btn=document.getElementById('srchBtn');
 const el=document.getElementById('srchResults');
 btn.textContent='⏳';btn.disabled=true;
 el.innerHTML=`<div class="empty" style="padding-top:40px"><div class="eic" style="font-size:30px;opacity:.5">⏳</div><div class="etx">Searching…</div></div>`;
-try{
-const url=`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=15&q=${encodeURIComponent(q)}&key=${YT_KEY}`;
-const r=await fetch(url);const d=await r.json();
-if(d.error){const msg=d.error.code===403?'Search limit reached for today. Try again tomorrow.':d.error.message;el.innerHTML=`<div class="empty" style="padding-top:40px"><div class="eic">⚠️</div><div class="etx">${esc(msg)}</div></div>`;}
-else if(!d.items||!d.items.length){el.innerHTML=`<div class="empty" style="padding-top:40px"><div class="eic">🔍</div><div class="etx">No results found</div></div>`;}
-else{el.innerHTML=d.items.map((item,i)=>{const id=item.id.videoId;const title=item.snippet.title;const channel=item.snippet.channelTitle;const thumb=item.snippet.thumbnails.medium?.url||item.snippet.thumbnails.default?.url||`https://img.youtube.com/vi/${id}/mqdefault.jpg`;return`<div class="qi srch-item" onclick="addFromSearch('${esc(id)}','${esc(title.replace(/'/g,'&#39;'))}','${esc(channel.replace(/'/g,'&#39;'))}','${esc(thumb)}')" style="cursor:pointer"><div class="qnum">${i+1}</div><img class="qthumb" src="${esc(thumb)}" alt="" loading="lazy"><div class="qinfo"><div class="qtitle">${esc(title)}</div><div class="qch">${esc(channel)}</div></div><div class="q-acts"><button class="q-act" style="color:var(--a);font-size:16px" title="Add &amp; Play">▶</button></div></div>`;}).join('');}
-}catch{el.innerHTML=`<div class="empty" style="padding-top:40px"><div class="eic">⚠️</div><div class="etx">Search failed. Check your connection.</div></div>`;}
+let results=null;
+for(const base of PIPED_INSTANCES){
+  try{
+    const r=await fetch(`${base}/search?q=${encodeURIComponent(q)}&filter=music_songs`,{signal:AbortSignal.timeout(6000)});
+    if(!r.ok)continue;
+    const d=await r.json();
+    if(d.items&&d.items.length){results=d.items;break;}
+  }catch{}
+}
+if(!results||!results.length){
+  el.innerHTML=`<div class="empty" style="padding-top:40px"><div class="eic">🔍</div><div class="etx">No results found.<br>Try a different search term.</div></div>`;
+}else{
+  el.innerHTML=results.slice(0,20).map((item,i)=>{
+    const id=(item.url||'').replace('/watch?v=','').split('&')[0];
+    const title=item.title||'Unknown';
+    const channel=item.uploaderName||'Unknown';
+    const thumb=item.thumbnail||`https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+    const dur=item.duration>0?` · ${Math.floor(item.duration/60)}:${String(item.duration%60).padStart(2,'0')}`:'' ;
+    return`<div class="qi srch-item" onclick="addFromSearch('${esc(id)}','${esc(title.replace(/'/g,"&#39;"))}','${esc(channel.replace(/'/g,"&#39;"))}','${esc(thumb)}')" style="cursor:pointer"><div class="qnum">${i+1}</div><img class="qthumb" src="${esc(thumb)}" alt="" loading="lazy"><div class="qinfo"><div class="qtitle">${esc(title)}</div><div class="qch">${esc(channel)}${dur}</div></div><div class="q-acts"><button class="q-act" style="color:var(--a);font-size:16px" title="Add &amp; Play">▶</button></div></div>`;
+  }).join('');
+}
 btn.textContent='🔍';btn.disabled=false;srchLoading=false;
 }
 async function addFromSearch(id,title,channel,thumb){
 if(queue.find(t=>t.id===id)){showToast('Already in queue — playing it now','inf');const idx=queue.findIndex(t=>t.id===id);playTrack(idx);goTab('home');return;}
-// Use best available thumb quality, fall back to the search result thumb
 const bestThumb=await getBestThumb(id).catch(()=>thumb||`https://img.youtube.com/vi/${id}/mqdefault.jpg`);
 const info={id,title,channel,thumb:bestThumb};
 queue.push(info);addToLib(info);saveQ();renderQ();playTrack(queue.length-1);goTab('home');showToast('Added: '+title.substring(0,40),'ok');
