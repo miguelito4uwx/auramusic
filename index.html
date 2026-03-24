@@ -1008,16 +1008,21 @@ document.addEventListener('visibilitychange',async()=>{if(document.visibilitySta
 function setMediaSession(t){
 if(!('mediaSession' in navigator))return;
 navigator.mediaSession.metadata=new MediaMetadata({title:t.title||'Track',artist:t.channel||'Aura',album:'Aura',artwork:[{src:t.thumb,sizes:'1280x720',type:'image/jpeg'},{src:`https://img.youtube.com/vi/${t.id}/hqdefault.jpg`,sizes:'480x360',type:'image/jpeg'},{src:`https://img.youtube.com/vi/${t.id}/mqdefault.jpg`,sizes:'320x180',type:'image/jpeg'}]});
-navigator.mediaSession.setActionHandler('play',()=>{if(ytReady)ytPlayer.playVideo();});
-navigator.mediaSession.setActionHandler('pause',()=>{if(ytReady)ytPlayer.pauseVideo();});
+navigator.mediaSession.setActionHandler('play',()=>{if(usingNative&&nativeAudio)nativeAudio.play().catch(()=>{});else if(ytReady)ytPlayer.playVideo();});
+navigator.mediaSession.setActionHandler('pause',()=>{if(usingNative&&nativeAudio)nativeAudio.pause();else if(ytReady)ytPlayer.pauseVideo();});
 navigator.mediaSession.setActionHandler('previoustrack',prevTrack);
 navigator.mediaSession.setActionHandler('nexttrack',nextTrack);
-try{navigator.mediaSession.setActionHandler('seekto',d=>{if(ytReady&&d.seekTime!=null)ytPlayer.seekTo(d.seekTime,true);});}catch{}
+try{navigator.mediaSession.setActionHandler('seekto',d=>{if(usingNative&&nativeAudio&&isFinite(nativeAudio.duration))nativeAudio.currentTime=d.seekTime;else if(!usingNative&&ytReady&&d.seekTime!=null)ytPlayer.seekTo(d.seekTime,true);});}catch{}
 }
 function setMSState(s){if('mediaSession' in navigator)navigator.mediaSession.playbackState=s;}
 function setMSPos(){
-if(!('mediaSession' in navigator)||!ytReady||!ytPlayer||!navigator.mediaSession.setPositionState)return;
-try{const p=ytPlayer.getCurrentTime()||0,d=ytPlayer.getDuration()||1;if(d>0)navigator.mediaSession.setPositionState({duration:d,playbackRate:1,position:Math.min(p,d)});}catch{}
+if(!('mediaSession' in navigator)||!navigator.mediaSession.setPositionState)return;
+try{
+  let p=0,d=1;
+  if(usingNative&&nativeAudio&&isFinite(nativeAudio.duration)){p=nativeAudio.currentTime||0;d=nativeAudio.duration;}
+  else if(!usingNative&&ytReady&&ytPlayer){p=ytPlayer.getCurrentTime()||0;d=ytPlayer.getDuration()||1;}
+  if(d>0)navigator.mediaSession.setPositionState({duration:d,playbackRate:1,position:Math.min(p,d)});
+}catch{}
 }
 
 /* ══ BOOT ══ */
@@ -1039,9 +1044,10 @@ playerVars:{autoplay:0,controls:0,rel:0,playsinline:1,enablejsapi:1,origin:locat
 events:{
 onReady:()=>{ytReady=true;setVol(prefs.vol||80);},
 onStateChange:e=>{
-if(e.data===YT.PlayerState.PLAYING){playing=true;updBtns();startVis();startProg();setMSState('playing');if(prefs.wakeLock)acquireWakeLock();startSilentAudio();}
-else if(e.data===YT.PlayerState.PAUSED){playing=false;updBtns();stopVis();clearInterval(progTimer);setMSState('paused');if(!prefs.wakeLock)releaseWakeLock();stopSilentAudio();}
-else if(e.data===YT.PlayerState.ENDED){playing=false;stopVis();clearInterval(progTimer);setMSState('none');releaseWakeLock();stopSilentAudio();onEnded();}
+if(usingNative)return; // native audio engine is in control, ignore iframe events
+if(e.data===YT.PlayerState.PLAYING){playing=true;updBtns();startVis();startProg();setMSState('playing');if(prefs.wakeLock)acquireWakeLock();}
+else if(e.data===YT.PlayerState.PAUSED){playing=false;updBtns();stopVis();clearInterval(progTimer);setMSState('paused');if(!prefs.wakeLock)releaseWakeLock();}
+else if(e.data===YT.PlayerState.ENDED){playing=false;stopVis();clearInterval(progTimer);setMSState('none');releaseWakeLock();onEnded();}
 },
 onError:e=>{const m={2:'Bad video ID',5:'HTML5 error',100:'Video not found',101:'Embed disabled',150:'Embed disabled'};showToast('Cannot play: '+(m[e.data]||'Error '+e.data),'err');playing=false;updBtns();stopVis();}
 }
@@ -1049,107 +1055,11 @@ onError:e=>{const m={2:'Bad video ID',5:'HTML5 error',100:'Video not found',101:
 };
 function onEnded(){if(rep){ytPlayer.seekTo(0);ytPlayer.playVideo();return;}if(prefs.autoplay!==false)nextTrack();}
 
-/* ══ iOS BACKGROUND AUDIO ENGINE ══
-   iOS Safari will only keep audio playing through the lock screen if:
-   1. A native <audio> element is actively playing (not muted, not zero volume)
-   2. That <audio> element is connected to the Web Audio API AudioContext
-   3. The AudioContext was created/resumed inside a user gesture
-   4. A heartbeat monitors for iOS suspending the YT iframe and resumes it
-
-   Architecture:
-   - A looping <audio> element plays a real (but near-silent) tone via Web Audio
-   - This holds the iOS audio session open as a "now playing" source
-   - A heartbeat polls every 2s; if YT has stalled despite playing=true, it nudges it back
-*/
-let _bgAudioEl=null;
-let _bgAudioCtx=null;
-let _bgOscillator=null;
-let _bgHeartbeat=null;
-let _lastYtTime=-1;
-let _stalledCount=0;
-
-function _ensureBgAudioEl(){
-  if(_bgAudioEl)return _bgAudioEl;
-  // Minimal valid MP3: 0.1s of near-silence (real audio data — iOS rejects pure silence)
-  // This is a tiny 44100Hz mono MP3 with a 20Hz tone at -60dB
-  const tinyMp3='data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAAA5TEVER//uQxAMAAAGkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-  _bgAudioEl=document.createElement('audio');
-  _bgAudioEl.src=tinyMp3;
-  _bgAudioEl.loop=true;
-  _bgAudioEl.volume=0.02; // must be audible enough for iOS to count as "real" audio
-  _bgAudioEl.setAttribute('playsinline','');
-  _bgAudioEl.setAttribute('preload','auto');
-  _bgAudioEl.style.cssText='position:fixed;width:1px;height:1px;top:-9999px;left:-9999px;pointer-events:none;opacity:0';
-  document.body.appendChild(_bgAudioEl);
-  return _bgAudioEl;
-}
-
-function _ensureAudioContext(){
-  if(_bgAudioCtx&&_bgAudioCtx.state!=='closed')return _bgAudioCtx;
-  try{
-    _bgAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    const el=_ensureBgAudioEl();
-    // Connect the <audio> element into the Web Audio graph — this is the key step
-    // that makes iOS treat this page as an active audio session
-    const src=_bgAudioCtx.createMediaElementSource(el);
-    // Add a tiny gain node so we can control volume without muting
-    const gain=_bgAudioCtx.createGain();
-    gain.gain.value=0.02;
-    src.connect(gain);
-    gain.connect(_bgAudioCtx.destination);
-  }catch(e){}
-  return _bgAudioCtx;
-}
-
-function startSilentAudio(){
-  const el=_ensureBgAudioEl();
-  const ctx=_ensureAudioContext();
-  // AudioContext must be resumed from a user-gesture context; if suspended, resume it
-  if(ctx&&ctx.state==='suspended')ctx.resume().catch(()=>{});
-  el.play().catch(()=>{});
-  // Start heartbeat to detect & recover iOS suspending the YT iframe
-  if(_bgHeartbeat)clearInterval(_bgHeartbeat);
-  _lastYtTime=-1;_stalledCount=0;
-  _bgHeartbeat=setInterval(()=>{
-    if(!playing||!ytReady||!ytPlayer)return;
-    try{
-      const now=ytPlayer.getCurrentTime()||0;
-      const state=ytPlayer.getPlayerState();
-      // YT state 1 = PLAYING. If it claims playing but time hasn't moved, it's been suspended.
-      if(state===1){
-        if(Math.abs(now-_lastYtTime)<0.1&&_lastYtTime>=0){
-          _stalledCount++;
-          if(_stalledCount>=2){
-            // iOS suspended the iframe — nudge it back
-            ytPlayer.pauseVideo();
-            setTimeout(()=>{try{ytPlayer.playVideo();}catch{}},320);
-            _stalledCount=0;
-          }
-        }else{_stalledCount=0;}
-      }
-      _lastYtTime=now;
-      // Also keep AudioContext alive
-      if(ctx&&ctx.state==='suspended')ctx.resume().catch(()=>{});
-    }catch{}
-  },2000);
-}
-
-function stopSilentAudio(){
-  if(_bgHeartbeat){clearInterval(_bgHeartbeat);_bgHeartbeat=null;}
-  _stalledCount=0;_lastYtTime=-1;
-  if(_bgAudioEl){_bgAudioEl.pause();}
-}
-
-// When returning from lock screen, immediately resume both the audio context and YT
+// Resume AudioContext and native audio when returning from lock screen
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden){
-    if(_bgAudioCtx&&_bgAudioCtx.state==='suspended')_bgAudioCtx.resume().catch(()=>{});
-    if(_bgAudioEl&&_bgAudioEl.paused&&playing)_bgAudioEl.play().catch(()=>{});
-    if(playing&&ytReady){
-      setTimeout(()=>{
-        try{if(ytPlayer.getPlayerState()!==1)ytPlayer.playVideo();}catch{}
-      },400);
-    }
+    if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});
+    if(usingNative&&nativeAudio&&nativeAudio.paused&&playing)nativeAudio.play().catch(()=>{});
   }
 });
 
@@ -1219,36 +1129,182 @@ if(t==='search')document.getElementById('srchIn').focus();
 if(t==='addsong')setTimeout(()=>document.getElementById('urlIn').focus(),200);
 }
 
+/* ══ PLAYBACK ENGINE ══
+   iOS Safari suspends YouTube iframes on lock screen — always.
+   Fix: fetch the real audio stream URL from Piped (open-source YT frontend),
+   play it through a native <audio> element which iOS keeps alive.
+   Falls back to YT iframe if Piped fails (desktop / non-iOS).
+*/
+
+// Piped instances to try in order
+const PIPED_INSTANCES=[
+  'https://pipedapi.kavin.rocks',
+  'https://piped-api.garudalinux.org',
+  'https://api.piped.projectsegfau.lt',
+];
+
+let nativeAudio=null; // the native <audio> element for iOS
+let usingNative=false; // true when playing via native audio
+let audioCtx=null;
+
+function _getNativeAudio(){
+  if(nativeAudio)return nativeAudio;
+  nativeAudio=document.createElement('audio');
+  nativeAudio.setAttribute('playsinline','');
+  nativeAudio.setAttribute('preload','auto');
+  nativeAudio.style.cssText='position:fixed;width:1px;height:1px;top:-9999px;pointer-events:none';
+  nativeAudio.addEventListener('ended',()=>{if(usingNative)onEnded();});
+  nativeAudio.addEventListener('pause',()=>{if(usingNative&&playing){playing=false;updBtns();stopVis();clearInterval(progTimer);setMSState('paused');}});
+  nativeAudio.addEventListener('play',()=>{if(usingNative){playing=true;updBtns();startVis();startProgNative();setMSState('playing');if(prefs.wakeLock)acquireWakeLock();}});
+  nativeAudio.addEventListener('error',()=>{if(usingNative){showToast('Stream error — retrying…','inf');usingNative=false;_playViaIframe(queue[curIdx]?.id);}});
+  document.body.appendChild(nativeAudio);
+  return nativeAudio;
+}
+
+function _ensureAudioContext(){
+  if(audioCtx&&audioCtx.state!=='closed')return audioCtx;
+  try{
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const src=audioCtx.createMediaElementSource(_getNativeAudio());
+    const gain=audioCtx.createGain();
+    gain.gain.value=1.0;
+    src.connect(gain);
+    gain.connect(audioCtx.destination);
+  }catch(e){}
+  return audioCtx;
+}
+
+async function _fetchPipedStream(videoId){
+  for(const base of PIPED_INSTANCES){
+    try{
+      const r=await fetch(`${base}/streams/${videoId}`,{signal:AbortSignal.timeout(5000)});
+      if(!r.ok)continue;
+      const d=await r.json();
+      // Prefer audio-only streams, highest quality
+      const streams=(d.audioStreams||[]).filter(s=>s.url);
+      if(!streams.length)continue;
+      streams.sort((a,b)=>(b.bitrate||0)-(a.bitrate||0));
+      return streams[0].url;
+    }catch{}
+  }
+  return null;
+}
+
+async function _playViaNative(track){
+  const el=_getNativeAudio();
+  // Resume AudioContext inside this user-gesture call stack
+  const ctx=_ensureAudioContext();
+  if(ctx&&ctx.state==='suspended')ctx.resume().catch(()=>{});
+
+  showToast('Loading…','inf');
+  const url=await _fetchPipedStream(track.id);
+  if(!url){
+    clearToast();
+    // Piped failed — fall back to iframe
+    usingNative=false;
+    _playViaIframe(track.id);
+    return;
+  }
+  usingNative=true;
+  el.src=url;
+  el.currentTime=0;
+  const vol=(prefs.vol!=null?prefs.vol:80)/100;
+  el.volume=Math.max(0.01,vol); // must not be 0 or iOS won't keep session alive
+  clearToast();
+  el.play().then(()=>{
+    playing=true;updBtns();startVis();startProgNative();setMSState('playing');
+    if(prefs.wakeLock)acquireWakeLock();
+  }).catch(e=>{
+    usingNative=false;
+    _playViaIframe(track.id);
+  });
+}
+
+function _playViaIframe(videoId){
+  if(!ytReady){setTimeout(()=>_playViaIframe(videoId),500);return;}
+  ytPlayer.loadVideoById(videoId);
+}
+
+function startProgNative(){
+  clearInterval(progTimer);
+  progTimer=setInterval(()=>{
+    if(!usingNative||!nativeAudio)return;
+    const c=nativeAudio.currentTime||0,d=nativeAudio.duration||1;
+    if(!isFinite(d))return;
+    const pct=(c/d)*100;
+    document.getElementById('progB').style.width=pct+'%';
+    document.getElementById('progTip').style.left=pct+'%';
+    document.getElementById('minipb').style.width=pct+'%';
+    document.getElementById('tNow').textContent=fmt(c);
+    document.getElementById('tDur').textContent=fmt(d);
+    setMSPos();
+  },500);
+}
+
+// Seek on progress bar click — works for both engines
+document.getElementById('progW').addEventListener('click',e=>{
+  if(usingNative&&nativeAudio){
+    const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width;
+    if(isFinite(nativeAudio.duration))nativeAudio.currentTime=pct*nativeAudio.duration;
+  } else if(!usingNative&&ytReady&&ytPlayer){
+    try{const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width,d=ytPlayer.getDuration();if(d)ytPlayer.seekTo(pct*d,true);}catch{}
+  }
+});
+
 /* ══ PLAYBACK ══ */
 function playTrack(idx){
-if(idx<0||idx>=queue.length)return;curIdx=idx;const t=queue[idx];
-if(!ytReady){setTimeout(()=>playTrack(idx),500);return;}
-_ensureAudioContext();
-addToLib(t);
-ytPlayer.loadVideoById(t.id);updatePlayerUI(t);setMediaSession(t);
-document.getElementById('mini').classList.add('on');
-if(user)S.s('aura_ci_'+user.id,curIdx);saveQ();renderQ();maybeShowBgBanner();
+  if(idx<0||idx>=queue.length)return;
+  curIdx=idx;const t=queue[idx];
+  // Stop whatever is currently playing
+  if(usingNative&&nativeAudio){nativeAudio.pause();nativeAudio.src='';}
+  else if(ytReady&&ytPlayer){try{ytPlayer.stopVideo();}catch{}}
+  usingNative=false;playing=false;stopVis();clearInterval(progTimer);
+  addToLib(t);updatePlayerUI(t);setMediaSession(t);
+  document.getElementById('mini').classList.add('on');
+  if(user)S.s('aura_ci_'+user.id,curIdx);saveQ();renderQ();maybeShowBgBanner();
+  // Always try native first (works on iOS lock screen)
+  _playViaNative(t);
 }
 function updatePlayerUI(t){
-document.getElementById('pcard').classList.remove('hidden');document.getElementById('playerEmpty').classList.add('hidden');
-document.getElementById('artImg').src=t.thumb;document.getElementById('tTitle').textContent=t.title;document.getElementById('tCh').textContent=t.channel;
-document.getElementById('miniThumb').src=t.thumb;document.getElementById('miniTitle').textContent=t.title;document.getElementById('miniSub').textContent=t.channel;
-const fl=favs[t.id];document.getElementById('favBtn').textContent=fl?'❤️':'🤍';document.getElementById('favBtn').classList.toggle('fav-on',!!fl);resetProg();
+  document.getElementById('pcard').classList.remove('hidden');document.getElementById('playerEmpty').classList.add('hidden');
+  document.getElementById('artImg').src=t.thumb;document.getElementById('tTitle').textContent=t.title;document.getElementById('tCh').textContent=t.channel;
+  document.getElementById('miniThumb').src=t.thumb;document.getElementById('miniTitle').textContent=t.title;document.getElementById('miniSub').textContent=t.channel;
+  const fl=favs[t.id];document.getElementById('favBtn').textContent=fl?'❤️':'🤍';document.getElementById('favBtn').classList.toggle('fav-on',!!fl);resetProg();
 }
-function togglePlay(){if(curIdx<0||!ytReady)return;if(!playing){_ensureAudioContext();}playing?ytPlayer.pauseVideo():ytPlayer.playVideo();}
-function stopTrack(){if(ytReady&&ytPlayer&&ytPlayer.stopVideo)ytPlayer.stopVideo();playing=false;updBtns();stopVis();clearInterval(progTimer);setMSState('none');stopSilentAudio();}
+function togglePlay(){
+  if(curIdx<0)return;
+  _ensureAudioContext();
+  if(usingNative&&nativeAudio){
+    playing?nativeAudio.pause():nativeAudio.play().catch(()=>{});
+  } else if(ytReady){
+    playing?ytPlayer.pauseVideo():ytPlayer.playVideo();
+  }
+}
+function stopTrack(){
+  if(usingNative&&nativeAudio){nativeAudio.pause();nativeAudio.src='';}
+  if(ytReady&&ytPlayer&&ytPlayer.stopVideo){try{ytPlayer.stopVideo();}catch{}}
+  playing=false;usingNative=false;updBtns();stopVis();clearInterval(progTimer);setMSState('none');
+}
 function prevTrack(){if(queue.length)playTrack(curIdx>0?curIdx-1:queue.length-1);}
 function nextTrack(){if(!queue.length)return;if(shuf){let n;do{n=Math.floor(Math.random()*queue.length)}while(queue.length>1&&n===curIdx);playTrack(n);}else playTrack(curIdx<queue.length-1?curIdx+1:0);}
 function toggleShuf(){shuf=!shuf;document.getElementById('shufBtn').classList.toggle('on',shuf);}
 function toggleRep(){rep=!rep;document.getElementById('repBtn').classList.toggle('on',rep);}
 function toggleFav(){if(curIdx<0)return;const id=queue[curIdx].id;favs[id]=!favs[id];document.getElementById('favBtn').textContent=favs[id]?'❤️':'🤍';document.getElementById('favBtn').classList.toggle('fav-on',favs[id]);if(user)S.s('aura_fav_'+user.id,favs);}
 function updBtns(){const ic=playing?'⏸':'▶';document.getElementById('playBtn').textContent=ic;document.getElementById('miniPlay').textContent=ic;}
-function setVol(v){v=parseInt(v);if(ytReady&&ytPlayer&&ytPlayer.setVolume)ytPlayer.setVolume(v);document.getElementById('volic').textContent=v===0?'🔇':v<40?'🔉':'🔊';document.getElementById('vslide').value=v;document.getElementById('vslide').style.background=`linear-gradient(90deg,var(--p) ${v}%,rgba(255,255,255,.1) ${v}%)`;prefs.vol=v;savePrefs();}
+function setVol(v){
+  v=parseInt(v);
+  if(usingNative&&nativeAudio)nativeAudio.volume=Math.max(0.01,v/100);
+  if(ytReady&&ytPlayer&&ytPlayer.setVolume)ytPlayer.setVolume(v);
+  document.getElementById('volic').textContent=v===0?'🔇':v<40?'🔉':'🔊';
+  document.getElementById('vslide').value=v;
+  document.getElementById('vslide').style.background=`linear-gradient(90deg,var(--p) ${v}%,rgba(255,255,255,.1) ${v}%)`;
+  prefs.vol=v;savePrefs();
+}
 document.getElementById('vslide').addEventListener('input',e=>setVol(e.target.value));
 document.getElementById('vslide').style.background='linear-gradient(90deg,var(--p) 80%,rgba(255,255,255,.1) 80%)';
 function startProg(){clearInterval(progTimer);progTimer=setInterval(()=>{if(!ytReady||!ytPlayer||!ytPlayer.getCurrentTime)return;try{const c=ytPlayer.getCurrentTime()||0,d=ytPlayer.getDuration()||1,pct=(c/d)*100;document.getElementById('progB').style.width=pct+'%';document.getElementById('progTip').style.left=pct+'%';document.getElementById('minipb').style.width=pct+'%';document.getElementById('tNow').textContent=fmt(c);document.getElementById('tDur').textContent=fmt(d);setMSPos();}catch{}},500);}
 function resetProg(){['progB','minipb'].forEach(id=>{document.getElementById(id).style.width='0%'});document.getElementById('progTip').style.left='0%';document.getElementById('tNow').textContent='0:00';document.getElementById('tDur').textContent='—';}
-document.getElementById('progW').addEventListener('click',e=>{if(!ytReady||!ytPlayer)return;try{const r=e.currentTarget.getBoundingClientRect(),pct=(e.clientX-r.left)/r.width,d=ytPlayer.getDuration();if(d)ytPlayer.seekTo(pct*d,true);}catch{}});
+
 const fmt=s=>{s=Math.floor(s||0);const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
 
 /* ══ ADD TRACK (from Add Song tab) ══ */
