@@ -28,6 +28,38 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{min-height:100%;background:var(--bg-full,var(--bg));color:var(--tx);font-family:var(--fb);overflow-x:hidden;font-size:14px;line-height:1.5}
+
+/* ══ DESKTOP LAYOUT ══ */
+@media(min-width:768px){
+  #app{max-width:900px;margin:0 auto}
+  .botbar-i{max-width:900px;margin:0 auto}
+  #miniwrap{left:0;right:0}
+  #mini{max-width:900px}
+  .tbtn{flex:1;color:#fff!important;opacity:.6;transition:opacity .2s,color .2s}
+  .tbtn:hover{opacity:.85}
+  .tbtn.on{opacity:1;color:#fff!important}
+  .tbtn .ti{font-size:20px}
+  .ov{align-items:center}
+  .modal{max-width:520px;border-radius:20px;margin-bottom:0}
+}
+
+/* ══ ADAPTIVE TEXT CONTRAST ══ */
+/* Applied via JS: data-theme="light" on body when background is light */
+body[data-theme="light"]{
+  --tx:#0a0010;
+  --tx2:rgba(20,0,50,.55);
+  --br:rgba(80,0,160,.18);
+  --c1:rgba(0,0,0,.05);
+  --c2:rgba(0,0,0,.09);
+}
+body[data-theme="light"] .botbar-i{background:rgba(240,235,255,.97)!important}
+body[data-theme="light"] .mini-i{background:rgba(240,235,255,.96)}
+body[data-theme="light"] #loader{background:var(--bg-full,var(--bg))}
+body[data-theme="light"] .pcard{background:linear-gradient(150deg,rgba(124,58,237,.08),rgba(6,182,212,.04),rgba(240,235,255,.75))}
+body[data-theme="light"] .fin{color:var(--tx)}
+body[data-theme="light"] .fin::placeholder{color:var(--tx2)}
+body[data-theme="light"] .urlin{color:var(--tx)}
+body[data-theme="light"] .urlin::placeholder{color:var(--tx2)}
 button{cursor:pointer;font-family:var(--fb);border:none;background:none}
 input{font-family:var(--fb);outline:none}
 img{display:block}
@@ -975,7 +1007,7 @@ document.addEventListener('visibilitychange',async()=>{if(document.visibilitySta
 /* ══ MEDIA SESSION ══ */
 function setMediaSession(t){
 if(!('mediaSession' in navigator))return;
-navigator.mediaSession.metadata=new MediaMetadata({title:t.title||'Track',artist:t.channel||'Aura',album:'Aura',artwork:[{src:t.thumb,sizes:'480x360',type:'image/jpeg'}]});
+navigator.mediaSession.metadata=new MediaMetadata({title:t.title||'Track',artist:t.channel||'Aura',album:'Aura',artwork:[{src:t.thumb,sizes:'1280x720',type:'image/jpeg'},{src:`https://img.youtube.com/vi/${t.id}/hqdefault.jpg`,sizes:'480x360',type:'image/jpeg'},{src:`https://img.youtube.com/vi/${t.id}/mqdefault.jpg`,sizes:'320x180',type:'image/jpeg'}]});
 navigator.mediaSession.setActionHandler('play',()=>{if(ytReady)ytPlayer.playVideo();});
 navigator.mediaSession.setActionHandler('pause',()=>{if(ytReady)ytPlayer.pauseVideo();});
 navigator.mediaSession.setActionHandler('previoustrack',prevTrack);
@@ -1017,14 +1049,42 @@ onError:e=>{const m={2:'Bad video ID',5:'HTML5 error',100:'Video not found',101:
 };
 function onEnded(){if(rep){ytPlayer.seekTo(0);ytPlayer.playVideo();return;}if(prefs.autoplay!==false)nextTrack();}
 
-/* ══ SILENT AUDIO KEEPALIVE ══ */
-let silentAudio=null;
-function startSilentAudio(){
-if(silentAudio)return;
-const silentMp3='data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsgU291bmQgRWZmZWN0cwB3d3cuYmlnc291bmRiYW5rLmNvbQBURU5DAAAAHQAAA1N3aXRjaCBTb3VuZHMAd3d3LmJpZ3NvdW5kYmFuay5jb20AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-silentAudio=new Audio(silentMp3);silentAudio.loop=true;silentAudio.volume=0.001;silentAudio.play().catch(()=>{});
+/* ══ HTML5 AUDIO KEEPALIVE — iOS background audio (Apple requires <audio> element) ══
+   Apple's WebKit only grants background audio privileges to a native HTML5 <audio> element.
+   We keep a persistent <audio> element alive (looping a 1-second silent WAV) which registers
+   this page as a "media session" with iOS, allowing the YouTube audio to continue
+   when the screen locks or the app is backgrounded.
+*/
+let _bgAudioEl=null;
+function _ensureBgAudioEl(){
+  if(_bgAudioEl)return _bgAudioEl;
+  // 1-second silent WAV (44100Hz, mono, 16-bit PCM) as a data URI
+  const silentWav='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+  _bgAudioEl=document.createElement('audio');
+  _bgAudioEl.id='bgKeepaliveAudio';
+  _bgAudioEl.src=silentWav;
+  _bgAudioEl.loop=true;
+  _bgAudioEl.volume=0.001;
+  _bgAudioEl.setAttribute('playsinline','');
+  _bgAudioEl.setAttribute('preload','auto');
+  // Apple requires the element to be in the DOM
+  _bgAudioEl.style.cssText='position:absolute;width:1px;height:1px;top:-9999px;left:-9999px;pointer-events:none';
+  document.body.appendChild(_bgAudioEl);
+  return _bgAudioEl;
 }
-function stopSilentAudio(){if(silentAudio){silentAudio.pause();silentAudio.src='';silentAudio=null;}}
+function startSilentAudio(){
+  const el=_ensureBgAudioEl();
+  el.play().catch(()=>{});
+}
+function stopSilentAudio(){
+  if(_bgAudioEl){_bgAudioEl.pause();}
+}
+// Also resume the keepalive if the page becomes visible again (e.g. user returns from lock screen)
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&playing&&_bgAudioEl&&_bgAudioEl.paused){
+    _bgAudioEl.play().catch(()=>{});
+  }
+});
 
 /* ══ ONBOARDING ══ */
 let obStep=0;const OBT=6;
@@ -1125,7 +1185,8 @@ const fmt=s=>{s=Math.floor(s||0);const m=Math.floor(s/60),sec=s%60;return m+':'+
 
 /* ══ ADD TRACK (from Add Song tab) ══ */
 function getVid(url){url=(url||'').trim();try{const u=new URL(url.startsWith('http')?url:'https://'+url);if(u.hostname.includes('youtu.be'))return u.pathname.slice(1).split(/[?&]/)[0];const v=u.searchParams.get('v');if(v)return v;}catch{}const m=url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);return m?m[1]:null;}
-async function fetchInfo(id){try{const r=await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);if(r.ok){const d=await r.json();return{id,title:d.title||'Track',channel:d.author_name||'Unknown',thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`};}}catch{}return{id,title:'YouTube Track',channel:'Unknown',thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`};}
+async function getBestThumb(id){const sizes=['maxresdefault','sddefault','hqdefault','mqdefault'];for(const s of sizes){const url=`https://img.youtube.com/vi/${id}/${s}.jpg`;try{const ok=await new Promise(res=>{const img=new Image();img.onload=()=>res(img.naturalWidth>120);img.onerror=()=>res(false);img.src=url;});if(ok)return url;}catch{}}return`https://img.youtube.com/vi/${id}/mqdefault.jpg`;}
+async function fetchInfo(id){let title='YouTube Track',channel='Unknown';try{const r=await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);if(r.ok){const d=await r.json();title=d.title||title;channel=d.author_name||channel;}}catch{}const thumb=await getBestThumb(id);return{id,title,channel,thumb};}
 async function handleAdd(){
 const raw=document.getElementById('urlIn').value.trim();
 if(!raw){showToast('Paste a YouTube link first.','err');return;}
@@ -1264,7 +1325,7 @@ resultList.scrollTop=resultList.scrollHeight;
 // Fetch proper info
 let info;
 try{info=await fetchInfo(id);}
-catch{info={id,title,channel:'Unknown',thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`};}
+catch{info={id,title,channel:'Unknown',thumb:await getBestThumb(id).catch(()=>`https://img.youtube.com/vi/${id}/mqdefault.jpg`)};}
 
 // Update row
 const existingRow=document.getElementById('irow-'+i);
@@ -1333,7 +1394,9 @@ btn.textContent='🔍';btn.disabled=false;srchLoading=false;
 }
 async function addFromSearch(id,title,channel,thumb){
 if(queue.find(t=>t.id===id)){showToast('Already in queue — playing it now','inf');const idx=queue.findIndex(t=>t.id===id);playTrack(idx);goTab('home');return;}
-const info={id,title,channel,thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`};
+// Use best available thumb quality, fall back to the search result thumb
+const bestThumb=await getBestThumb(id).catch(()=>thumb||`https://img.youtube.com/vi/${id}/mqdefault.jpg`);
+const info={id,title,channel,thumb:bestThumb};
 queue.push(info);addToLib(info);saveQ();renderQ();playTrack(queue.length-1);goTab('home');showToast('Added: '+title.substring(0,40),'ok');
 }
 
@@ -1397,10 +1460,34 @@ function clearToast(){const el=document.getElementById('toast');el.className='to
 function exportData(){const d={accounts:accounts.map(a=>({...a,ph:'[hidden]'})),playlists:pls,queue,prefs};const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='aura-data.json';a.click();}
 function nukeData(){if(!confirm('Delete everything? Cannot be undone.'))return;localStorage.clear();location.reload();}
 
+/* ══ ADAPTIVE TEXT CONTRAST ══ */
+function hexLuminance(hex){
+  hex=hex.replace('#','');
+  if(hex.length===3)hex=hex.split('').map(c=>c+c).join('');
+  const r=parseInt(hex.substr(0,2),16)/255;
+  const g=parseInt(hex.substr(2,2),16)/255;
+  const b=parseInt(hex.substr(4,2),16)/255;
+  const toL=c=>c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4);
+  return 0.2126*toL(r)+0.7152*toL(g)+0.0722*toL(b);
+}
+function updateAdaptiveContrast(){
+  const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#07000f';
+  try{
+    const lum=hexLuminance(bg);
+    document.body.setAttribute('data-theme',lum>0.35?'light':'dark');
+  }catch(e){document.body.setAttribute('data-theme','dark');}
+}
+const _origSetBg=setBg;
+setBg=function(i){_origSetBg(i);updateAdaptiveContrast();};
+const _origApplyPrefs=applyPrefs;
+applyPrefs=function(){_origApplyPrefs();updateAdaptiveContrast();};
+
 /* ══ UTIL ══ */
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 renderQ();
+updateAdaptiveContrast();
 </script>
 
 </body>
 </html>
+
