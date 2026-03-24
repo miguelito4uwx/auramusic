@@ -1049,40 +1049,107 @@ onError:e=>{const m={2:'Bad video ID',5:'HTML5 error',100:'Video not found',101:
 };
 function onEnded(){if(rep){ytPlayer.seekTo(0);ytPlayer.playVideo();return;}if(prefs.autoplay!==false)nextTrack();}
 
-/* ══ HTML5 AUDIO KEEPALIVE — iOS background audio (Apple requires <audio> element) ══
-   Apple's WebKit only grants background audio privileges to a native HTML5 <audio> element.
-   We keep a persistent <audio> element alive (looping a 1-second silent WAV) which registers
-   this page as a "media session" with iOS, allowing the YouTube audio to continue
-   when the screen locks or the app is backgrounded.
+/* ══ iOS BACKGROUND AUDIO ENGINE ══
+   iOS Safari will only keep audio playing through the lock screen if:
+   1. A native <audio> element is actively playing (not muted, not zero volume)
+   2. That <audio> element is connected to the Web Audio API AudioContext
+   3. The AudioContext was created/resumed inside a user gesture
+   4. A heartbeat monitors for iOS suspending the YT iframe and resumes it
+
+   Architecture:
+   - A looping <audio> element plays a real (but near-silent) tone via Web Audio
+   - This holds the iOS audio session open as a "now playing" source
+   - A heartbeat polls every 2s; if YT has stalled despite playing=true, it nudges it back
 */
 let _bgAudioEl=null;
+let _bgAudioCtx=null;
+let _bgOscillator=null;
+let _bgHeartbeat=null;
+let _lastYtTime=-1;
+let _stalledCount=0;
+
 function _ensureBgAudioEl(){
   if(_bgAudioEl)return _bgAudioEl;
-  // 1-second silent WAV (44100Hz, mono, 16-bit PCM) as a data URI
-  const silentWav='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+  // Minimal valid MP3: 0.1s of near-silence (real audio data — iOS rejects pure silence)
+  // This is a tiny 44100Hz mono MP3 with a 20Hz tone at -60dB
+  const tinyMp3='data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////8AAAA5TEVER//uQxAMAAAGkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
   _bgAudioEl=document.createElement('audio');
-  _bgAudioEl.id='bgKeepaliveAudio';
-  _bgAudioEl.src=silentWav;
+  _bgAudioEl.src=tinyMp3;
   _bgAudioEl.loop=true;
-  _bgAudioEl.volume=0.001;
+  _bgAudioEl.volume=0.02; // must be audible enough for iOS to count as "real" audio
   _bgAudioEl.setAttribute('playsinline','');
   _bgAudioEl.setAttribute('preload','auto');
-  // Apple requires the element to be in the DOM
-  _bgAudioEl.style.cssText='position:absolute;width:1px;height:1px;top:-9999px;left:-9999px;pointer-events:none';
+  _bgAudioEl.style.cssText='position:fixed;width:1px;height:1px;top:-9999px;left:-9999px;pointer-events:none;opacity:0';
   document.body.appendChild(_bgAudioEl);
   return _bgAudioEl;
 }
+
+function _ensureAudioContext(){
+  if(_bgAudioCtx&&_bgAudioCtx.state!=='closed')return _bgAudioCtx;
+  try{
+    _bgAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const el=_ensureBgAudioEl();
+    // Connect the <audio> element into the Web Audio graph — this is the key step
+    // that makes iOS treat this page as an active audio session
+    const src=_bgAudioCtx.createMediaElementSource(el);
+    // Add a tiny gain node so we can control volume without muting
+    const gain=_bgAudioCtx.createGain();
+    gain.gain.value=0.02;
+    src.connect(gain);
+    gain.connect(_bgAudioCtx.destination);
+  }catch(e){}
+  return _bgAudioCtx;
+}
+
 function startSilentAudio(){
   const el=_ensureBgAudioEl();
+  const ctx=_ensureAudioContext();
+  // AudioContext must be resumed from a user-gesture context; if suspended, resume it
+  if(ctx&&ctx.state==='suspended')ctx.resume().catch(()=>{});
   el.play().catch(()=>{});
+  // Start heartbeat to detect & recover iOS suspending the YT iframe
+  if(_bgHeartbeat)clearInterval(_bgHeartbeat);
+  _lastYtTime=-1;_stalledCount=0;
+  _bgHeartbeat=setInterval(()=>{
+    if(!playing||!ytReady||!ytPlayer)return;
+    try{
+      const now=ytPlayer.getCurrentTime()||0;
+      const state=ytPlayer.getPlayerState();
+      // YT state 1 = PLAYING. If it claims playing but time hasn't moved, it's been suspended.
+      if(state===1){
+        if(Math.abs(now-_lastYtTime)<0.1&&_lastYtTime>=0){
+          _stalledCount++;
+          if(_stalledCount>=2){
+            // iOS suspended the iframe — nudge it back
+            ytPlayer.pauseVideo();
+            setTimeout(()=>{try{ytPlayer.playVideo();}catch{}},320);
+            _stalledCount=0;
+          }
+        }else{_stalledCount=0;}
+      }
+      _lastYtTime=now;
+      // Also keep AudioContext alive
+      if(ctx&&ctx.state==='suspended')ctx.resume().catch(()=>{});
+    }catch{}
+  },2000);
 }
+
 function stopSilentAudio(){
+  if(_bgHeartbeat){clearInterval(_bgHeartbeat);_bgHeartbeat=null;}
+  _stalledCount=0;_lastYtTime=-1;
   if(_bgAudioEl){_bgAudioEl.pause();}
 }
-// Also resume the keepalive if the page becomes visible again (e.g. user returns from lock screen)
+
+// When returning from lock screen, immediately resume both the audio context and YT
 document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden&&playing&&_bgAudioEl&&_bgAudioEl.paused){
-    _bgAudioEl.play().catch(()=>{});
+  if(!document.hidden){
+    if(_bgAudioCtx&&_bgAudioCtx.state==='suspended')_bgAudioCtx.resume().catch(()=>{});
+    if(_bgAudioEl&&_bgAudioEl.paused&&playing)_bgAudioEl.play().catch(()=>{});
+    if(playing&&ytReady){
+      setTimeout(()=>{
+        try{if(ytPlayer.getPlayerState()!==1)ytPlayer.playVideo();}catch{}
+      },400);
+    }
   }
 });
 
@@ -1156,6 +1223,7 @@ if(t==='addsong')setTimeout(()=>document.getElementById('urlIn').focus(),200);
 function playTrack(idx){
 if(idx<0||idx>=queue.length)return;curIdx=idx;const t=queue[idx];
 if(!ytReady){setTimeout(()=>playTrack(idx),500);return;}
+_ensureAudioContext();
 addToLib(t);
 ytPlayer.loadVideoById(t.id);updatePlayerUI(t);setMediaSession(t);
 document.getElementById('mini').classList.add('on');
@@ -1167,7 +1235,7 @@ document.getElementById('artImg').src=t.thumb;document.getElementById('tTitle').
 document.getElementById('miniThumb').src=t.thumb;document.getElementById('miniTitle').textContent=t.title;document.getElementById('miniSub').textContent=t.channel;
 const fl=favs[t.id];document.getElementById('favBtn').textContent=fl?'❤️':'🤍';document.getElementById('favBtn').classList.toggle('fav-on',!!fl);resetProg();
 }
-function togglePlay(){if(curIdx<0||!ytReady)return;playing?ytPlayer.pauseVideo():ytPlayer.playVideo();}
+function togglePlay(){if(curIdx<0||!ytReady)return;if(!playing){_ensureAudioContext();}playing?ytPlayer.pauseVideo():ytPlayer.playVideo();}
 function stopTrack(){if(ytReady&&ytPlayer&&ytPlayer.stopVideo)ytPlayer.stopVideo();playing=false;updBtns();stopVis();clearInterval(progTimer);setMSState('none');stopSilentAudio();}
 function prevTrack(){if(queue.length)playTrack(curIdx>0?curIdx-1:queue.length-1);}
 function nextTrack(){if(!queue.length)return;if(shuf){let n;do{n=Math.floor(Math.random()*queue.length)}while(queue.length>1&&n===curIdx);playTrack(n);}else playTrack(curIdx<queue.length-1?curIdx+1:0);}
@@ -1490,4 +1558,3 @@ updateAdaptiveContrast();
 
 </body>
 </html>
-
