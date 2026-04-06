@@ -34,6 +34,8 @@
 
   --lyr-color:#c77dff;
   --lyr-glow:rgba(155,93,229,.55);
+  /* ── NEW: past/sung words = album color darkened ── */
+  --lyr-past-color:hsl(280,60%,28%);
   --song-color:#9b5de5;
   --song-color2:#48cae4;
   --sidebar-w:220px;
@@ -155,7 +157,6 @@ background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='htt
 
 /* ══════════════════════════════
 SCROLL AREA
-Pad bottom = mini-h + botbar-h + safe-area + gap
 ══════════════════════════════ */
 .scroll-area{
   flex:1;
@@ -170,8 +171,7 @@ Pad bottom = mini-h + botbar-h + safe-area + gap
 @keyframes panelIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
 /* ══════════════════════════════
-MINI PLAYER — sits directly ABOVE the botbar
-No overlap: bottom = botbar-h + safe-area
+MINI PLAYER
 ══════════════════════════════ */
 #miniwrap{
   position:fixed;
@@ -216,7 +216,6 @@ No overlap: bottom = botbar-h + safe-area
 
 /* ══════════════════════════════
 BOTTOM NAV
-Fixed at bottom, height = --botbar-h + safe-area padding
 ══════════════════════════════ */
 .botbar{
   position:fixed;
@@ -559,9 +558,9 @@ LYRICS — album-color dynamic word glow
   color:rgba(210,180,255,.2);
   text-shadow:none;
 }
-/* Past lines: slightly brighter than future */
+/* ── Past lines: album color darkened ── */
 .lyr-line-container.past .lyr-word{
-  color:rgba(210,180,255,.35);
+  color:var(--lyr-past-color);
   text-shadow:none;
 }
 /* Active line future words: a hint brighter */
@@ -578,10 +577,10 @@ LYRICS — album-color dynamic word glow
   line-height:1.5;
   transition:color .18s ease, text-shadow .18s ease, transform .18s ease;
 }
-/* Sung words — glow in extracted album color */
+/* Sung words on the active line — album color darkened */
 .lyr-word.w-sung{
-  color:var(--lyr-color);
-  text-shadow:0 0 18px var(--lyr-glow), 0 0 36px var(--lyr-glow);
+  color:var(--lyr-past-color);
+  text-shadow:none;
 }
 /* Currently singing word — bright white + strong album-color halo */
 .lyr-word.w-active{
@@ -604,7 +603,6 @@ LYRICS — album-color dynamic word glow
 .lyr-instrumental{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 0;gap:8px;}
 .lyr-inst-label{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--tx3);margin-bottom:8px;}
 .lyr-dots{display:flex;gap:10px;align-items:center;}
-/* Instrumental dots pulse in album color */
 .lyr-dot-b{width:10px;height:10px;border-radius:50%;background:var(--lyr-color);opacity:.35;animation:dotBeat 1.6s ease-in-out infinite;}
 .lyr-dot-b:nth-child(1){animation-delay:0s;}
 .lyr-dot-b:nth-child(2){animation-delay:.18s;}
@@ -1082,16 +1080,14 @@ DESKTOP (≥ 900px)
 <div class="overlay" id="edit-track-ov"><div class="modal-sheet"><div class="modal-handle"></div><button class="modal-close" onclick="closeOv('edit-track-ov')">✕</button><div class="modal-title">Edit Track</div><div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;"><div id="edit-thumb-wrap" style="width:74px;height:74px;border-radius:12px;overflow:hidden;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);cursor:pointer;position:relative;" onclick="document.getElementById('edit-thumb-pick').click()"><img id="edit-thumb-img" src="" style="width:100%;height:100%;object-fit:cover;"><div style="position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:16px;">🖼</div></div><input type="file" id="edit-thumb-pick" accept="image/*" style="display:none" onchange="handleTrackThumb(this)"><div style="flex:1;display:flex;flex-direction:column;gap:8px;"><div class="fg" style="margin:0;"><div class="flbl">Song Name</div><input class="fin" id="edit-track-title" placeholder="Song title"></div><div class="fg" style="margin:0;"><div class="flbl">Artist</div><input class="fin" id="edit-track-artist" placeholder="Artist name"></div></div></div><button class="btn-pr" onclick="saveTrackEdit()">Save Changes</button></div></div>
 
 <script>
-/* ══ FORCE DARK: prevent any light mode override ══ */
+/* ══ FORCE DARK ══ */
 (function(){
-  // Force meta color-scheme
-  let ms = document.querySelector('meta[name="color-scheme"]');
+  let ms=document.querySelector('meta[name="color-scheme"]');
   if(!ms){ms=document.createElement('meta');ms.name='color-scheme';document.head.appendChild(ms);}
   ms.content='dark';
-  // Ensure html/body stay dark at all times
   document.documentElement.style.background='#050008';
   document.documentElement.style.colorScheme='dark';
-  document.body && (document.body.style.background='#050008');
+  document.body&&(document.body.style.background='#050008');
 })();
 
 /* ══ STORAGE ══ */
@@ -1115,11 +1111,9 @@ let lastRecsId=null;
 const FAVS_PL_ID='pl_fav_locked';
 const YT_KEY='AIzaSyDpsyKbDOQGoGRBpuG7ctewNBJS1shG6Ps';
 
-/* ══ STANDARD THUMBNAILS (hqdefault = reliable 480x360) ══ */
-function thumbUrl(id, quality='hqdefault'){
-  return `https://img.youtube.com/vi/${id}/${quality}.jpg`;
-}
-function makeThumb(id){ return thumbUrl(id,'hqdefault'); }
+/* ══ THUMBNAILS ══ */
+function thumbUrl(id,quality='hqdefault'){return `https://img.youtube.com/vi/${id}/${quality}.jpg`;}
+function makeThumb(id){return thumbUrl(id,'hqdefault');}
 
 /* ══ WEB AUDIO ══ */
 let audioCtx=null,analyser=null,eqBass=null,eqMid=null,eqTreble=null;
@@ -1230,7 +1224,6 @@ function startVisualizer(){
 
 /* ══ BOOT ══ */
 window.onload=()=>{
-  // Force dark immediately on load
   document.documentElement.style.background='#050008';
   document.documentElement.style.colorScheme='dark';
   setTimeout(()=>{document.getElementById('loader').classList.add('out');boot();},2400);
@@ -1251,9 +1244,19 @@ window.onYouTubeIframeAPIReady=function(){
     events:{
       onReady:()=>{ytReady=true;ytPlayer.setVolume(parseInt(prefs.vol)||80);},
       onStateChange:e=>{
-        if(e.data===YT.PlayerState.PLAYING){playing=true;updBtns();startProg();setMSState('playing');startSilentAudio();resumeAudio();setVinylSpin(true);}
-        else if(e.data===YT.PlayerState.PAUSED){playing=false;updBtns();clearInterval(progTimer);setMSState('paused');stopSilentAudio();setVinylSpin(false);}
-        else if(e.data===YT.PlayerState.ENDED){playing=false;clearInterval(progTimer);setMSState('none');stopSilentAudio();onEnded();setVinylSpin(false);}
+        if(e.data===YT.PlayerState.PLAYING){
+          playing=true;updBtns();startProg();setMSState('playing');
+          ensureSilentAudio();resumeAudio();setVinylSpin(true);
+        }
+        else if(e.data===YT.PlayerState.PAUSED){
+          playing=false;updBtns();clearInterval(progTimer);setMSState('paused');setVinylSpin(false);
+          // NOTE: we do NOT stopSilentAudio here — keeping it alive helps
+          // Brave/strict browsers resume autoplay for the next track
+        }
+        else if(e.data===YT.PlayerState.ENDED){
+          playing=false;clearInterval(progTimer);setMSState('none');setVinylSpin(false);
+          onEnded();
+        }
       },
       onError:e=>{
         const m={2:'Bad video ID',5:'HTML5 error',100:'Video not found',101:'Embed disabled',150:'Embed disabled'};
@@ -1267,13 +1270,29 @@ window.onYouTubeIframeAPIReady=function(){
 function setVinylSpin(on){const d=document.getElementById('fp-vinyl-disc');if(d)d.classList.toggle('spinning',on);}
 function onEnded(){if(rep===2){ytPlayer.seekTo(0);ytPlayer.playVideo();return;}if(prefs.autoplay!==false)nextTrack();}
 
-function startSilentAudio(){
-  if(silentAudio)return;
-  const mp3='data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsgU291bmQgRWZmZWN0cwB3d3cuYmlnc291bmRiYW5rLmNvbQBURU5DAAAAHQAAA1N3aXRjaCBTb3VuZHMAd3d3LmJpZ3NvdW5kYmFuay5jb20AAAA=';
-  silentAudio=new Audio(mp3);silentAudio.loop=true;silentAudio.volume=0.001;
-  silentAudio.play().then(()=>{initAudioEngine();connectSilentAudio(silentAudio);}).catch(()=>{});
+/* ══════════════════════════════
+SILENT AUDIO — keeps browser audio session alive across tracks.
+We never stop it once started (until explicit user logout/signout),
+so Brave and other strict browsers don't kill autoplay mid-queue.
+══════════════════════════════ */
+function ensureSilentAudio(){
+  if(silentAudio&&!silentAudio.paused)return; // already running
+  if(!silentAudio){
+    // Tiny valid MP3 (44 bytes, 1 frame silence)
+    const mp3='data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsgU291bmQgRWZmZWN0cwB3d3cuYmlnc291bmRiYW5rLmNvbQBURU5DAAAAHQAAA1N3aXRjaCBTb3VuZHMAd3d3LmJpZ3NvdW5kYmFuay5jb20AAAA=';
+    silentAudio=new Audio(mp3);
+    silentAudio.loop=true;
+    silentAudio.volume=0.001;
+  }
+  silentAudio.play().then(()=>{
+    initAudioEngine();
+    connectSilentAudio(silentAudio);
+  }).catch(()=>{});
 }
-function stopSilentAudio(){if(silentAudio){silentAudio.pause();silentAudio.src='';silentAudio=null;silentSource=null;}}
+function stopSilentAudio(){
+  // Only called on logout / full stop — NOT between tracks
+  if(silentAudio){silentAudio.pause();silentAudio.src='';silentAudio=null;silentSource=null;}
+}
 
 function setMediaSession(t){
   if(!('mediaSession' in navigator))return;
@@ -1350,6 +1369,7 @@ function loginAs(a,silent=false){
 }
 function doLogout(){
   stopTrack();user=null;S.d('aura_last');curIdx=-1;playing=false;queue=[];pls=[];lib=[];
+  stopSilentAudio(); // explicit logout = clean up audio
   document.getElementById('mini').classList.remove('on');closeFullPlayer();showAuth();
 }
 function renderAccRow(){
@@ -1422,12 +1442,18 @@ function updateFullPlayerUI(t){
   const vi=document.getElementById('fp-vinyl-img');
   if(vi){vi.src=thumb;vi.onerror=function(){this.onerror=null;};}
   updateFavBtn(t);
-  // Extract album color for lyrics glow from the standard thumbnail
   extractAlbumColor(thumb,t.id);
 }
 function updateFavBtn(t){document.getElementById('fp-fav-btn').textContent=(t&&favs[t.id])?'❤️':'🤍';}
 
-/* ══ ALBUM COLOR EXTRACTION — drives the lyrics glow ══ */
+/* ══ ALBUM COLOR EXTRACTION ══
+   Derives 4 CSS vars from the album thumbnail:
+   --lyr-color      bright vibrant hue  → active word glow
+   --lyr-glow       semi-transparent    → glow shadow
+   --lyr-past-color same hue but DARK   → already-played words / past lines
+   --song-color     medium hue          → visualizer / vinyl glow
+   --song-color2    complementary hue   → visualizer second color
+══ */
 function extractAlbumColor(src, videoId){
   const img=new Image();
   img.crossOrigin='anonymous';
@@ -1457,19 +1483,24 @@ function extractAlbumColor(src, videoId){
           best={h,s:Math.round(s*100),l:Math.round(l*100),score};
         }
       }
-      // Boost saturation & keep lightness vivid but not washed out
       const fs=Math.min(100,Math.max(60,best.s+10));
       const fl=Math.min(72,Math.max(55,best.l));
-      // lyr-color: the vibrant album hue for sung words
+
+      // Bright vibrant colour for active word glow
       const lyrColor=`hsl(${best.h},${fs}%,${fl}%)`;
-      // lyr-glow: darker, more transparent version for the shadow
       const lyrGlow=`hsla(${best.h},${fs}%,${Math.max(25,fl-22)}%,0.65)`;
-      // song-color: slightly darker for visualizer/vinyl
+
+      // ── PAST / SUNG: same hue but much darker (30–40% lightness) ──
+      const pastL=Math.max(20,Math.min(38,fl-24));
+      const lyrPastColor=`hsl(${best.h},${fs}%,${pastL}%)`;
+
+      // Visualizer / vinyl colours
       const songColor=`hsl(${best.h},${fs}%,${Math.min(58,fl-5)}%)`;
       const songColor2=`hsl(${(best.h+50)%360},${Math.min(100,fs+8)}%,${Math.min(76,fl+10)}%)`;
 
       document.documentElement.style.setProperty('--lyr-color',lyrColor);
       document.documentElement.style.setProperty('--lyr-glow',lyrGlow);
+      document.documentElement.style.setProperty('--lyr-past-color',lyrPastColor);
       document.documentElement.style.setProperty('--song-color',songColor);
       document.documentElement.style.setProperty('--song-color2',songColor2);
 
@@ -1485,6 +1516,7 @@ function resetSongColor(){
   document.documentElement.style.setProperty('--song-color2','#48cae4');
   document.documentElement.style.setProperty('--lyr-color','#c77dff');
   document.documentElement.style.setProperty('--lyr-glow','rgba(155,93,229,.55)');
+  document.documentElement.style.setProperty('--lyr-past-color','hsl(280,60%,28%)');
 }
 
 /* ══ SEEKBAR ══ */
@@ -1509,12 +1541,36 @@ function playTrack(idx){
   addToLib(t);
   document.getElementById('fp-spinner').classList.add('loading');
   document.getElementById('fp-art').classList.remove('playing');document.getElementById('fp-art').classList.add('paused-art');
-  ytPlayer.loadVideoById(t.id);updateMiniUI(t);updateFullPlayerUI(t);setMediaSession(t);
+
+  // ── BRAVE / STRICT BROWSER FIX ──
+  // loadVideoById auto-plays in the YT iframe, but Brave may block it on
+  // track transitions. We fire explicit playVideo() retries after short
+  // delays so the next track always starts even if the first attempt is
+  // blocked. The persistent silentAudio (ensureSilentAudio) keeps the
+  // browser's audio permission alive between tracks.
+  resumeAudio();
+  ytPlayer.loadVideoById(t.id);
+
+  // Retry play in case Brave stalls after loadVideoById
+  const retryPlay=(delay)=>{
+    setTimeout(()=>{
+      if(!ytReady||!ytPlayer)return;
+      try{
+        const state=ytPlayer.getPlayerState();
+        // -1=unstarted, 3=buffering — push it to play
+        if(state===-1||state===3||state===5){ytPlayer.playVideo();}
+      }catch{}
+    },delay);
+  };
+  retryPlay(300);
+  retryPlay(800);
+  retryPlay(1800);
+
+  updateMiniUI(t);updateFullPlayerUI(t);setMediaSession(t);
   document.getElementById('mini').classList.add('on');
   if(user)S.s('aura_ci_'+user.id,curIdx);saveQ();renderAddQueue();
   lyricsData=null;lyricsType=null;lastLyrLineIdx=-1;lastRecsId=null;
   if(document.getElementById('fp-queue-panel').classList.contains('open'))renderFpQueue();
-  // Re-fetch lyrics if lyrics panel is open
   if(document.getElementById('fp-lyrics-panel').classList.contains('open')){fetchLyrics();}
 }
 function updateMiniUI(t){
@@ -1526,7 +1582,7 @@ function updateMiniUI(t){
   document.getElementById('mini-sub').textContent=t.channel||'';
 }
 function togglePlay(){if(curIdx<0||!ytReady)return;resumeAudio();playing?ytPlayer.pauseVideo():ytPlayer.playVideo();}
-function stopTrack(){if(ytReady&&ytPlayer&&ytPlayer.stopVideo)ytPlayer.stopVideo();playing=false;updBtns();clearInterval(progTimer);setMSState('none');stopSilentAudio();setVinylSpin(false);}
+function stopTrack(){if(ytReady&&ytPlayer&&ytPlayer.stopVideo)ytPlayer.stopVideo();playing=false;updBtns();clearInterval(progTimer);setMSState('none');setVinylSpin(false);}
 function prevTrack(){if(queue.length)playTrack(curIdx>0?curIdx-1:queue.length-1);}
 function nextTrack(){if(!queue.length)return;if(shuf){let n;do{n=Math.floor(Math.random()*queue.length)}while(queue.length>1&&n===curIdx);playTrack(n);}else playTrack(curIdx<queue.length-1?curIdx+1:0);}
 function toggleShuf(){shuf=!shuf;document.getElementById('fp-shuf-btn').classList.toggle('active-ctrl',shuf);showToast(shuf?'Shuffle on ⇄':'Shuffle off','inf');}
@@ -2009,15 +2065,7 @@ function buildSwatches(){document.getElementById('swatches').innerHTML=SWATCHES.
 function buildBgOps(){document.getElementById('bg-ops').innerHTML=BG_OPTIONS.map(b=>`<div class="bg-op${prefs.bg===b.bg?' active':''}" style="background:${b.bg};border:2px solid rgba(255,255,255,.1);" onclick="applyBg('${b.bg}')" title="${b.label}"></div>`).join('');}
 function buildFontOps(){document.getElementById('font-ops').innerHTML=FONT_OPTIONS.map((f,i)=>`<div class="font-op${prefs.fontIdx===i?' active':''}" style="font-family:${f.f}" onclick="applyFont(${i})">${f.label}</div>`).join('');}
 function applyAccent(c){prefs.accent=c;savePrefs();const r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16);const p2=`rgb(${Math.min(255,r+50)},${Math.min(255,g+50)},${Math.min(255,b+50)})`;document.documentElement.style.setProperty('--p',c);document.documentElement.style.setProperty('--p2',p2);document.documentElement.style.setProperty('--grad',`linear-gradient(135deg,${c},#48cae4)`);buildSwatches();}
-function applyBg(bg){
-  prefs.bg=bg;savePrefs();
-  // When changing background, ensure we keep dark mode
-  document.documentElement.style.setProperty('--bg',bg);
-  document.documentElement.style.setProperty('--bg2',bg);
-  document.documentElement.style.background=bg;
-  document.body.style.background=bg;
-  buildBgOps();
-}
+function applyBg(bg){prefs.bg=bg;savePrefs();document.documentElement.style.setProperty('--bg',bg);document.documentElement.style.setProperty('--bg2',bg);document.documentElement.style.background=bg;document.body.style.background=bg;buildBgOps();}
 function applyFont(i){prefs.fontIdx=i;savePrefs();const f=FONT_OPTIONS[i];document.documentElement.style.setProperty('--fb',f.f);document.documentElement.style.setProperty('--fd',f.fd);buildFontOps();}
 function applyHex(v){if(/^#[0-9a-f]{6}$/i.test(v))applyAccent(v);}
 function applyPrefs(){
