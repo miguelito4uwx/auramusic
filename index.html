@@ -268,15 +268,17 @@ MINI PLAYER
 FULL PLAYER — the star of the show
 ═══════════════════════════════════════════════════ */
 #full-player{
-position:fixed;inset:0;z-index:600;
+position:fixed;top:0;bottom:0;z-index:600;
 display:flex;flex-direction:column;align-items:center;
 background:var(–bg);
 transform:translateY(100%);
 transition:transform .52s cubic-bezier(.32,.72,0,1);
-overflow:hidden;
-max-width:480px;left:50%;margin-left:-50%;
+overflow-y:auto;overflow-x:hidden;
+width:min(100vw,480px);
+left:max(0px,calc(50vw - 240px));
+-webkit-overflow-scrolling:touch;
 }
-@media(max-width:480px){#full-player{left:0;margin-left:0;}}
+#full-player::-webkit-scrollbar{display:none;}
 #full-player.open{transform:translateY(0);}
 
 /* Animated BG behind album art */
@@ -800,7 +802,7 @@ overflow:hidden;
   <!-- Extra controls -->
 
   <div class="fp-extras">
-    <button class="fp-extra-btn" id="fp-queue-btn" onclick="openPanel('fp-queue-panel')">
+    <button class="fp-extra-btn" id="fp-queue-btn" onclick="openPanel('fp-queue-panel');renderFpQueue()">
       <span class="fp-extra-icon">☰</span>Queue
     </button>
     <button class="fp-extra-btn" id="fp-lyrics-btn" onclick="openLyrics()">
@@ -1093,24 +1095,58 @@ function updateFavBtn(t){
 ═══════════════════════════════════════════ */
 (function initSeek(){
   const track=document.getElementById('fp-seek-track');
-  function seek(e){
-    if(!ytReady||!ytPlayer||!ytPlayer.getDuration)return;
+  const fill=document.getElementById('fp-seek-fill');
+  const thumb=document.getElementById('fp-seek-thumb');
+  const timeCur=document.getElementById('fp-time-cur');
+
+  function getPos(e){
     const rect=track.getBoundingClientRect();
-    const x=(e.type.startsWith('touch')?e.touches[0].clientX:e.clientX)-rect.left;
-    const pct=Math.max(0,Math.min(1,x/rect.width));
-    const dur=ytPlayer.getDuration()||1;
-    ytPlayer.seekTo(pct*dur,true);
-    document.getElementById('fp-seek-fill').style.width=(pct*100)+'%';
-    document.getElementById('fp-seek-thumb').style.left=(pct*100)+'%';
-    document.getElementById('fp-time-cur').textContent=fmt(pct*dur);
+    const clientX=e.type.startsWith('touch')?e.touches[0].clientX:e.clientX;
+    return Math.max(0,Math.min(1,(clientX-rect.left)/rect.width));
   }
-  track.addEventListener('mousedown',e=>{seekDragging=true;track.classList.add('dragging');seek(e);});
-  track.addEventListener('touchstart',e=>{seekDragging=true;track.classList.add('dragging');seek(e);},{passive:true});
-  document.addEventListener('mousemove',e=>{if(seekDragging)seek(e);});
-  document.addEventListener('touchmove',e=>{if(seekDragging)seek(e);},{passive:true});
-  document.addEventListener('mouseup',()=>{seekDragging=false;track.classList.remove('dragging');});
-  document.addEventListener('touchend',()=>{seekDragging=false;track.classList.remove('dragging');});
-  track.addEventListener('click',seek);
+  function applySeek(pct){
+    fill.style.width=(pct*100)+'%';
+    thumb.style.left=(pct*100)+'%';
+    if(ytReady&&ytPlayer&&ytPlayer.getDuration){
+      const dur=ytPlayer.getDuration()||0;
+      timeCur.textContent=fmt(pct*dur);
+    }
+  }
+  function commitSeek(pct){
+    if(ytReady&&ytPlayer&&ytPlayer.getDuration){
+      ytPlayer.seekTo(pct*(ytPlayer.getDuration()||0),true);
+    }
+  }
+
+  track.addEventListener('mousedown',e=>{
+    seekDragging=true;track.classList.add('dragging');
+    fill.style.transition='none';
+    applySeek(getPos(e));
+  });
+  track.addEventListener('touchstart',e=>{
+    seekDragging=true;track.classList.add('dragging');
+    fill.style.transition='none';
+    applySeek(getPos(e));
+  },{passive:true});
+  document.addEventListener('mousemove',e=>{if(seekDragging)applySeek(getPos(e));});
+  document.addEventListener('touchmove',e=>{if(seekDragging)applySeek(getPos(e));},{passive:true});
+  document.addEventListener('mouseup',e=>{
+    if(!seekDragging)return;
+    commitSeek(getPos(e));
+    seekDragging=false;track.classList.remove('dragging');
+    fill.style.transition='';
+  });
+  document.addEventListener('touchend',e=>{
+    if(!seekDragging)return;
+    // use last known pct
+    const pct=parseFloat(fill.style.width)/100||0;
+    commitSeek(pct);
+    seekDragging=false;track.classList.remove('dragging');
+    fill.style.transition='';
+  });
+  track.addEventListener('click',e=>{
+    const pct=getPos(e);applySeek(pct);commitSeek(pct);
+  });
 })();
 
 /* ═══════════════════════════════════════════
@@ -1128,7 +1164,8 @@ function playTrack(idx){
   if(user)S.s('aura_ci_'+user.id,curIdx);saveQ();
   renderAddQueue();
   // Reset lyrics/recs for new song
-  lyricsData=null;lyricsType=null;clearInterval(lyricsTimer);
+  lyricsData=null;lyricsType=null;lastLyrIdx=-1;clearInterval(lyricsTimer);
+  lastRecsId=null;
   // Update queue panel if open
   if(document.getElementById('fp-queue-panel').classList.contains('open'))renderFpQueue();
 }
@@ -1203,7 +1240,24 @@ function renderFpQueue(){
   initFpQDrag();
 }
 function fpQPlay(idx){playTrack(idx);renderFpQueue();}
-function fpQRm(e,i){e.stopPropagation();queue.splice(i,1);if(i===curIdx){if(queue.length)playTrack(Math.min(i,queue.length-1));else{curIdx=-1;stopTrack();document.getElementById('mini').classList.remove('on');}}else if(curIdx>i)curIdx--;saveQ();renderAddQueue();renderFpQueue();}
+function fpQRm(e,i){
+  e.stopPropagation();
+  const wasPlaying=(i===curIdx);
+  queue.splice(i,1);
+  if(wasPlaying){
+    if(queue.length){
+      const next=Math.min(i,queue.length-1);
+      playTrack(next);
+    }else{
+      curIdx=-1;stopTrack();
+      document.getElementById('mini').classList.remove('on');
+      closeFullPlayer();
+    }
+  }else if(curIdx>i){
+    curIdx--;
+  }
+  saveQ();renderAddQueue();renderFpQueue();
+}
 
 function initFpQDrag(){
   const list=document.getElementById('fp-queue-body');
@@ -1218,6 +1272,7 @@ function initFpQDrag(){
 /* Panel open hooks */
 function openLyrics(){
   openPanel('fp-lyrics-panel');
+  lastLyrIdx=-1; // reset highlight
   if(!lyricsData)fetchLyrics();
 }
 function openRecs(){
@@ -1318,7 +1373,10 @@ let lastLyrIdx=-1;
 function syncLyrics(currentTime){
   if(!lyricsData||lyricsType!=='synced')return;
   let activeIdx=0;
-  for(let i=0;i<lyricsData.length;i++){if(lyricsData[i].time<=currentTime+0.3)activeIdx=i;else break;}
+  for(let i=0;i<lyricsData.length;i++){
+    if(lyricsData[i].time<=currentTime+0.3) activeIdx=i;
+    else break;
+  }
   if(activeIdx===lastLyrIdx)return;
   lastLyrIdx=activeIdx;
   const lines=document.querySelectorAll('.lyr-line');
@@ -1326,12 +1384,13 @@ function syncLyrics(currentTime){
     el.classList.toggle('lyr-active',i===activeIdx);
     el.classList.toggle('lyr-past',i<activeIdx);
   });
-  // Smooth auto-scroll
+  // Smooth auto-scroll — only if lyrics panel is open
+  if(!document.getElementById('fp-lyrics-panel').classList.contains('open'))return;
   const active=document.getElementById('lrc'+activeIdx);
   if(active){
     const panel=document.getElementById('fp-lyrics-body');
     const offset=active.offsetTop-panel.clientHeight/2+active.clientHeight/2;
-    panel.scrollTo({top:offset,behavior:'smooth'});
+    panel.scrollTo({top:Math.max(0,offset),behavior:'smooth'});
   }
 }
 
@@ -1438,7 +1497,16 @@ async function fetchBillboard(){const el=document.getElementById('billboard-list
 async function searchBillboardSong(title,artist){document.getElementById('srch-in').value=`${title} ${artist} official`;doSearch();}
 
 /* QUEUE HELPERS */
-function rmQ(e,i){e.stopPropagation();queue.splice(i,1);if(i===curIdx){if(queue.length)playTrack(Math.min(i,queue.length-1));else{curIdx=-1;stopTrack();document.getElementById('mini').classList.remove('on');}}else if(curIdx>i)curIdx--;saveQ();renderAddQueue();}
+function rmQ(e,i){
+  e.stopPropagation();
+  const wasPlaying=(i===curIdx);
+  queue.splice(i,1);
+  if(wasPlaying){
+    if(queue.length){playTrack(Math.min(i,queue.length-1));}
+    else{curIdx=-1;stopTrack();document.getElementById('mini').classList.remove('on');}
+  }else if(curIdx>i){curIdx--;}
+  saveQ();renderAddQueue();
+}
 function saveQ(){if(user&&prefs.remQ!==false)S.s('aura_q_'+user.id,queue);}
 
 /* LIBRARY */
@@ -1573,8 +1641,8 @@ function openOv(id){document.getElementById(id).classList.add('open');}
 function closeOv(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 
-/* Open queue from full player — also render it */
-document.getElementById('fp-queue-btn').addEventListener('click',()=>{renderFpQueue();});
+/* Open queue from full player — render it first */
+// (handled via inline onclick="openPanel('fp-queue-panel');renderFpQueue()" on the button)
 
 /* TOAST */
 let toastT=null;
