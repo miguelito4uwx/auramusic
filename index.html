@@ -373,9 +373,23 @@ overflow:hidden;
 .fp-q-rm:active{color:var(–red);}
 
 /* LYRICS PANEL */
-.lyr-line{font-size:18px;font-weight:600;line-height:1.6;color:var(–tx3);padding:6px 0;transition:color .35s,transform .35s,font-size .35s;cursor:pointer;font-family:var(–fd);}
-.lyr-line.lyr-active{color:var(–tx);font-size:21px;transform:scale(1.03);transform-origin:left;}
-.lyr-line.lyr-past{color:var(–tx3);opacity:.5;}
+.lyr-line{
+font-size:18px;font-weight:600;line-height:1.6;
+color:rgba(210,180,255,.38);
+padding:6px 0;
+transition:color .4s ease,transform .4s ease,font-size .4s ease,text-shadow .4s ease;
+cursor:pointer;font-family:var(–fd);
+}
+.lyr-line.lyr-active{
+color:var(–lyr-color,var(–tx));
+font-size:22px;
+transform:scale(1.04);
+transform-origin:left;
+text-shadow:0 0 28px var(–lyr-glow,rgba(155,93,229,.5));
+}
+.lyr-line.lyr-past{
+color:rgba(210,180,255,.18);
+}
 .lyr-plain{font-size:16px;line-height:1.85;color:var(–tx2);font-family:var(–fb);}
 .lyr-loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(–tx3);gap:10px;}
 .lyr-loading-ring{width:24px;height:24px;border-radius:50%;border:2px solid transparent;border-top-color:var(–p);animation:spin .8s linear infinite;flex-shrink:0;}
@@ -1083,11 +1097,76 @@ function updateFullPlayerUI(t){
   document.getElementById('fp-title').textContent=t.title||'Unknown';
   document.getElementById('fp-artist').textContent=t.channel||'Unknown';
   updateFavBtn(t);
+  if(t.thumb) extractAlbumColor(t.thumb);
 }
 function updateFavBtn(t){
   const btn=document.getElementById('fp-fav-btn');
   const liked=t&&favs[t.id];
   btn.textContent=liked?'❤️':'🤍';
+}
+
+/* ═══════════════════════════════════════════
+   ALBUM COLOR EXTRACTION
+   Draws the thumbnail to a tiny canvas, finds
+   the most vivid/saturated pixel cluster, and
+   sets --lyr-color + --lyr-glow on the lyrics panel
+═══════════════════════════════════════════ */
+function extractAlbumColor(thumbUrl){
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=()=>{
+    try{
+      const size=24; // tiny sample grid
+      const c=document.createElement('canvas');
+      c.width=c.height=size;
+      const ctx=c.getContext('2d');
+      ctx.drawImage(img,0,0,size,size);
+      const data=ctx.getImageData(0,0,size,size).data;
+
+      // Collect pixels, filter out near-black/near-white/near-grey, pick most saturated
+      let best={h:0,s:0,l:0,score:0};
+      for(let i=0;i<data.length;i+=4){
+        const r=data[i]/255,g=data[i+1]/255,b=data[i+2]/255;
+        const max=Math.max(r,g,b),min=Math.min(r,g,b);
+        const l=(max+min)/2;
+        if(l<0.08||l>0.92) continue; // skip near-black/white
+        const s=max===min?0:(l<0.5?(max-min)/(max+min):(max-min)/(2-max-min));
+        if(s<0.25) continue; // skip desaturated
+        // Weight saturation heavily, mildly prefer mid-brightness
+        const score=s*2+(1-Math.abs(l-0.5))*0.6;
+        if(score>best.score){
+          // Convert to hsl string
+          let h=0;
+          if(max!==min){
+            if(max===r) h=(g-b)/(max-min)+(g<b?6:0);
+            else if(max===g) h=(b-r)/(max-min)+2;
+            else h=(r-g)/(max-min)+4;
+            h=Math.round(h*60);
+          }
+          best={h,s:Math.round(s*100),l:Math.round(l*100),score};
+        }
+      }
+
+      // Clamp lightness so the lyric text stays readable and vibrant
+      const finalL=Math.min(72,Math.max(58,best.l));
+      const finalS=Math.min(100,Math.max(60,best.s));
+      const color=`hsl(${best.h},${finalS}%,${finalL}%)`;
+      const glow=`hsla(${best.h},${finalS}%,${finalL-20}%,0.55)`;
+
+      document.getElementById('fp-lyrics-panel').style.setProperty('--lyr-color',color);
+      document.getElementById('fp-lyrics-panel').style.setProperty('--lyr-glow',glow);
+    }catch{
+      // CORS or canvas error — fall back to theme accent
+      document.getElementById('fp-lyrics-panel').style.removeProperty('--lyr-color');
+      document.getElementById('fp-lyrics-panel').style.removeProperty('--lyr-glow');
+    }
+  };
+  img.onerror=()=>{
+    document.getElementById('fp-lyrics-panel').style.removeProperty('--lyr-color');
+    document.getElementById('fp-lyrics-panel').style.removeProperty('--lyr-glow');
+  };
+  // Add cache-buster only if needed; YouTube thumbs are usually CORS-friendly
+  img.src=thumbUrl;
 }
 
 /* ═══════════════════════════════════════════
@@ -1383,6 +1462,7 @@ function syncLyrics(currentTime){
   lines.forEach((el,i)=>{
     el.classList.toggle('lyr-active',i===activeIdx);
     el.classList.toggle('lyr-past',i<activeIdx);
+    // future lines: no class, default CSS handles the mid-dim color
   });
   // Smooth auto-scroll — only if lyrics panel is open
   if(!document.getElementById('fp-lyrics-panel').classList.contains('open'))return;
